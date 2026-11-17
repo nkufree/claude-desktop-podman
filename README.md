@@ -8,6 +8,21 @@
 
 Linux 安装包来自 [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) 的社区打包版本。该项目不属于 Anthropic 官方 Linux 发行版；桌面登录和功能兼容性取决于社区版本及上游服务。Cowork 等依赖系统集成的功能不保证可用。
 
+## 页面展示
+
+以下为项目实际运行截图。网页中选择镜像来源、配置资源后，可直接进入 Linux 桌面，在容器内部登录 Claude。
+
+| 预构建镜像配置 | 浏览器远程桌面 |
+| --- | --- |
+| ![预构建镜像配置页面](docs/screenshots/prebuilt-image.jpg) | ![Linux 远程桌面与 Claude 欢迎页面](docs/screenshots/remote-desktop.jpg) |
+
+<details>
+<summary>查看完整环境配置页：挂载目录、端口映射与保存容器</summary>
+
+![完整环境配置页面](docs/screenshots/configuration.jpg)
+
+</details>
+
 ## 启动
 
 需要 Python 3.9+ 和 Podman。网页服务仅使用 Python 标准库，不需要 npm、pip 或前端构建。
