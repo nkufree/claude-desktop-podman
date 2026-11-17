@@ -46,13 +46,23 @@
           <div class="form-footer"><span id="save-state">配置仅保存在此项目中</span><button type="submit" id="save-button" disabled class="button secondary">保存配置</button></div>
         </form>
         <div class="right-column">
+          <section class="panel operation-panel" aria-labelledby="operation-heading">
+            <div class="operation-heading"><h2 id="operation-heading">容器操作</h2><p>管理当前 Linux 桌面</p></div>
+            <div class="container-actions">
+              <button type="button" class="button container-action primary" data-action="start" disabled><span class="action-icon" aria-hidden="true">↻</span><span class="action-label">应用配置并重启</span></button>
+              <button type="button" class="button container-action secondary" data-action="save" disabled><span class="action-icon" aria-hidden="true">▣</span><span class="action-label">保存容器</span></button>
+              <button type="button" class="button container-action secondary" data-action="logs" disabled><span class="action-icon" aria-hidden="true">≡</span><span class="action-label">获取容器日志</span></button>
+              <button type="button" class="button container-action secondary" data-action="rebuild" disabled><span class="action-icon" aria-hidden="true">⟳</span><span class="action-label">重建镜像并启动</span></button>
+              <button type="button" class="button container-action danger" data-action="stop" disabled><span class="action-icon" aria-hidden="true">□</span><span class="action-label">停止容器</span></button>
+            </div>
+            <div class="container-target"><span>当前容器</span><code id="container-name">容器独立运行</code></div>
+          </section>
           <div class="launch-card"><div class="launch-art" aria-hidden="true"><div class="art-window"><div class="window-dots">● ● ●</div><span>✳</span><div class="art-line"></div><div class="art-line short"></div></div><span class="art-orbit">↗</span><div class="art-tag">LINUX DESKTOP</div></div><span class="step-number">02 / LAUNCH</span><h2>你的 Claude，准备就绪。</h2><p id="image-launch-help">首次启动自动构建镜像，安装桌面和 Claude。之后直接进入你的工作环境。</p><button id="start-button" disabled class="button primary wide" data-action="start">启动桌面 <span>↗</span></button><button id="open-desktop" class="button secondary wide" data-view="desktop" hidden>进入远程桌面 ↗</button><div class="launch-foot"><span class="small-dot"></span><span id="launch-description">无需导入宿主机登录凭据</span></div></div>
           <div class="info-note"><span>ⓘ</span><div><strong>关于 Linux 版本</strong><p>使用 <a href="https://github.com/aaddrick/claude-desktop-debian" target="_blank" rel="noreferrer">社区 Debian 打包版本 ↗</a>。功能与登录可用性取决于上游版本，暂不保证 Cowork 等系统集成功能。</p></div></div>
         </div>
       </div>
       <div class="how-it-works"><span>从配置到对话，只需三步</span><div><b>01</b> 配置容器资源 <i>→</i> <b>02</b> 启动 Linux 桌面 <i>→</i> <b>03</b> 在桌面中登录 Claude</div></div>
       <div id="saved-image-info" class="saved-image-info" hidden><strong>最近保存</strong><span id="saved-image-time"></span><code id="saved-image-name"></code><small>同一镜像来源下次启动继续使用；更换来源、重建或重新拉取会替换启动镜像。挂载卷保持独立。</small></div>
-      <div class="runtime-bar"><span id="container-name">容器独立运行</span><div><button class="text-button" data-action="start">应用配置并重启</button><button class="text-button" data-action="save" disabled>保存容器</button><button class="text-button" data-action="logs">获取容器日志</button><button class="text-button" data-action="rebuild">重建镜像并启动</button><button class="text-button danger" data-action="stop">停止容器</button></div></div>
     </section>
     <section id="view-desktop" class="view desktop-view" hidden><div class="desktop-heading"><div><h1>远程桌面</h1><p>在容器浏览器内完成登录，回调会自动返回同一桌面中的 Claude。</p></div><div><button class="button secondary" data-action="save" disabled>保存容器</button><button id="reconnect" class="button secondary">重新连接</button><button id="fullscreen" class="button secondary">全屏 ↗</button></div></div><div id="desktop-frame" class="desktop-frame"><div id="desktop-empty" class="empty-state"><span>▱</span><h2>桌面尚未启动</h2><p>在「概览与配置」中启动桌面，准备完成后即可连接。</p><button class="button primary" data-view="overview">返回配置</button></div><iframe id="desktop" title="Claude Linux 远程桌面" allow="clipboard-read; clipboard-write; fullscreen" hidden></iframe></div><p class="desktop-tip">使用配置密码自动创建或解锁容器密钥环，可在「概览与配置」自行修改。已有密钥环密码不匹配时，请先解锁并在「Passwords and Keys」中修改。登录及密钥环资料保存在 ~/.claude_podman/desktop-home/。左侧 noVNC 工具栏支持剪贴板、缩放和特殊按键。</p></section>
     <section id="view-logs" class="view" hidden><div class="desktop-heading"><div><div class="eyebrow">WORKSPACE ACTIVITY</div><h1>运行日志</h1><p>镜像构建、容器启动与错误信息会显示在这里。</p></div><button class="button secondary" data-action="logs">获取容器日志</button></div><div class="log-panel"><div class="log-header"><span><i class="small-dot"></i> <span id="log-status">等待操作</span></span><span>最近 600 行 · 自动刷新</span></div><pre id="logs" aria-live="polite">尚无日志。启动桌面后会显示构建进度。</pre></div></section>

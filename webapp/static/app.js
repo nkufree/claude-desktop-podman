@@ -18,7 +18,7 @@ function renderImageSource() {
     ? '首次启动下载已构建好的桌面镜像，随后直接创建容器。登录仍在容器内部完成。'
     : '首次启动自动构建镜像，安装桌面和 Claude。之后直接进入你的工作环境。';
   document.querySelectorAll('[data-action="rebuild"]').forEach(button => {
-    button.textContent = pull ? '重新拉取镜像并启动' : '重建镜像并启动';
+    (button.querySelector('.action-label') || button).textContent = pull ? '重新拉取镜像并启动' : '重建镜像并启动';
   });
 }
 $('#image-source').addEventListener('change', renderImageSource);
