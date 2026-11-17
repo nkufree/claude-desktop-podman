@@ -63,11 +63,11 @@ make check                           # 单元测试、HTTP/WebSocket 集成测�
 | 自行构建 | 使用项目 `desktop/Containerfile`，在本机安装桌面、主题和 Claude Desktop；可设置社区版本、自定义 `.deb` 和 Debian 软件源 |
 | 使用预构建镜像 | 直接拉取 GitHub Packages 中发布的完整桌面镜像，跳过本机构建；高级安装设置隐藏，以镜像内版本为准 |
 
-默认预构建地址为 `ghcr.io/nkufree/claude-desktop-podman/claude-desktop:latest`，也可指定 `:sha-提交完整SHA` 标签或 `@sha256:摘要`。镜像支持 AMD64 / ARM64，Podman 根据当前架构自动选择。这里使用的是完整桌面镜像，原来的 `claude-code` package 仅提供旧版命令行工具，不能用于网页桌面。
+默认预构建地址为 `ghcr.io/nkufree/claude-desktop-podman/claude-desktop:latest`，也可指定 `:sha-提交完整SHA` 标签或 `@sha256:摘要`。镜像支持 AMD64 / ARM64，Podman 根据当前架构自动选择。本项目仅构建和发布完整桌面镜像。
 
 主分支更新、定时任务和手动触发会通过 GitHub Actions 在原生 AMD64、ARM64 runner 构建桌面，两个架构都成功后才发布多架构 `latest` 和提交标签。新 package 首次发布默认为私有时，仓库所有者需在 package 设置中将可见性改为 Public，才能免登录拉取；私有包先在宿主机终端执行 `podman login ghcr.io`，网页不保存仓库令牌。
 
-构建只需在 GitHub [Build and Push Images](https://github.com/nkufree/claude-desktop-podman/actions/workflows/build-and-push.yml) 中点击 **Run workflow**。`claude-code` 和桌面镜像的全部构建步骤、命令、标签及推送过程见 [镜像构建与发布全过程](docs/build-images.md)，该文档地址也写入镜像的 Package 元数据。
+构建只需在 GitHub [Build and Push Images](https://github.com/nkufree/claude-desktop-podman/actions/workflows/build-and-push.yml) 中点击 **Run workflow**。桌面镜像的全部构建步骤、命令、标签及推送过程见 [镜像构建与发布全过程](docs/build-images.md)，该文档地址也写入镜像的 Package 元数据。
 
 同一来源下普通启动复用本地镜像和最近保存的容器快照，不会每次下载 `latest`。「重新拉取镜像并启动」会更新预构建镜像；「重建镜像并启动」会按本机设置重新构建。更换镜像来源或地址后，下一次启动会更新启动镜像。新镜像准备失败时保留当前容器，不会自动改用另一种方式。更换或刷新启动镜像会取消最近快照的默认启动选择，旧快照仍保留在 Podman 中，挂载目录始终保留。
 
@@ -153,7 +153,7 @@ ssh -L 8765:127.0.0.1:8765 user@host
 - **Podman 未安装**：macOS 使用 `brew install podman`。程序也会查找 `/opt/homebrew/bin`、`/usr/local/bin` 和 `~/.local/homebrew/bin` 下的 Podman。
 - **引擎未连接**：macOS 在页面启动虚拟机，或使用 `podman machine list` / `podman machine start`。已有虚拟机将被复用，不会修改其资源。
 - **镜像构建失败**：「运行日志」查看具体错误；检查代理、GitHub 访问限制及发行版依赖。可以指定固定发布版本或自定义包地址后重建。
-- **预构建镜像拉取失败**：确认桌面发布 workflow 已完成；尚未发布的标签会返回 manifest unknown。私有 package 先 `podman login ghcr.io`，或由所有者设为 Public。检查代理和架构，`claude-code` package 不包含远程桌面。
+- **预构建镜像拉取失败**：确认桌面发布 workflow 已完成；尚未发布的标签会返回 manifest unknown。私有 package 先 `podman login ghcr.io`，或由所有者设为 Public。检查代理和架构，并确认使用上述桌面镜像地址。
 - **进入远程桌面后日志增多**：websockify 和 VNC 会记录连接、协议协商、画面编码及断开统计，通常属于正常输出。Debian noVNC 的 `package.json` 404 只影响版本信息显示；持续断线、认证失败或浏览器红色异常需要另行排查。
 - **桌面可见但 Claude 未启动**：页面点击「获取容器日志」；在容器终端执行 `launch-claude` 查看错误。更新社区安装包可能需要调整依赖或启动命令。
 - **登录未回到 Claude**：允许 Chromium 打开 `claude://`，保持容器内 Claude 运行；不要将认证链接复制到宿主浏览器完成。
@@ -170,8 +170,6 @@ webapp/static/        中文配置控制台与远程桌面页面
 desktop/              Debian 桌面 Containerfile、安装器、桌面启动脚本
 tests/                配置、容器命令、安全边界和双向代理测试
 ```
-
-另保留 Claude Code 命令行启动器 `bin/claude`，使用方法见 [Claude Code 命令行说明](docs/legacy-cli.md)。该启动器与网页桌面使用独立镜像与登录存储。
 
 ## 许可证
 
