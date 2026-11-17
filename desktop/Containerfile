@@ -35,9 +35,9 @@ COPY launch-browser.sh /usr/local/bin/launch-browser
 COPY configure-desktop.sh /usr/local/bin/configure-desktop
 COPY windows-style /usr/local/share/claude-podman/windows-style
 COPY claude.desktop /usr/share/applications/claude-container.desktop
+COPY browser.desktop /usr/share/applications/container-browser.desktop
 RUN chmod 755 /usr/local/bin/start-desktop /usr/local/bin/launch-claude /usr/local/bin/launch-browser /usr/local/bin/configure-desktop \
-    && printf '[Desktop Entry]\nType=Application\nName=Container Browser\nExec=/usr/local/bin/launch-browser %%U\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\n' \
-       > /usr/share/applications/container-browser.desktop \
+    && desktop-file-validate /usr/share/applications/claude-container.desktop /usr/share/applications/container-browser.desktop \
     && update-desktop-database /usr/share/applications
 
 ENV HOME=/home/claude DISPLAY=:1 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US:en TZ=America/New_York \

@@ -6,6 +6,8 @@
 
 桌面预装现成的 [Fluent GTK Theme](https://github.com/vinceliuice/Fluent-gtk-theme)，采用 Windows Fluent 风格的浅色控件和 Xfwm4 窗口装饰，搭配 Papirus 图标、Whisker 开始菜单及底部任务栏。主题固定为上游提交 `7a49a464b0188c340101c52965c18190b1c694cf` 并校验 SHA256；直接安装上游预编译样式资源，保留其 GPL 许可证。首次应用会备份已有 Xfce 配置，之后保留用户自定义外观。
 
+桌面默认提供 **Claude Desktop** 和 **Chromium** 快捷方式，底部任务栏也提供相同入口，分别显示 Claude 和 Chromium 标志。浏览器实际使用 Chromium，支持 AMD64 / ARM64，并沿用容器代理和内部登录配置；启动时会同步更新已有 home 目录中的项目快捷方式。
+
 Linux 安装包来自 [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) 的社区打包版本。该项目不属于 Anthropic 官方 Linux 发行版；桌面登录和功能兼容性取决于社区版本及上游服务。Cowork 等依赖系统集成的功能不保证可用。
 
 ## 页面展示

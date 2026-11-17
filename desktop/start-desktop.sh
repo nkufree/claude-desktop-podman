@@ -6,10 +6,8 @@ mkdir -p "$XDG_RUNTIME_DIR" "$HOME/.config/autostart" "$HOME/Desktop"
 chmod 700 "$XDG_RUNTIME_DIR"
 /usr/local/bin/configure-desktop
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
-# This file is recreated on every start; a persistent home keeps login state,
-# browser profiles, keyring, and the custom-protocol association together.
-cp /usr/share/applications/claude-container.desktop "$HOME/Desktop/Claude.desktop"
-chmod +x "$HOME/Desktop/Claude.desktop"
+# A persistent home keeps login state, browser profiles, keyring, and protocol
+# associations together. configure-desktop refreshes the project shortcuts.
 cat > "$HOME/.config/autostart/claude.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
