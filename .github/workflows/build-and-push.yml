@@ -10,7 +10,77 @@ on:
     - cron: '0 0 * * *'  # Runs daily at midnight UTC
 
 jobs:
+  desktop:
+    name: Desktop (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Resolve desktop image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/claude-desktop" >> "$GITHUB_OUTPUT"
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build desktop image
+        uses: docker/build-push-action@v6
+        with:
+          context: desktop
+          file: desktop/Containerfile
+          platforms: linux/${{ matrix.arch }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=Claude Desktop Linux desktop
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: CLAUDE_INSTALL_REV=${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=desktop-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=desktop-${{ matrix.arch }}
+
+  desktop-manifest:
+    name: Publish desktop multi-platform image
+    needs: desktop
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish latest and commit tags
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/claude-desktop"
+          docker buildx imagetools create \
+            --tag "$IMAGE:latest" \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            "$IMAGE:sha-$GITHUB_SHA-amd64" \
+            "$IMAGE:sha-$GITHUB_SHA-arm64"
+          echo "### Desktop image" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$IMAGE:latest\` (AMD64 / ARM64)" >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    name: Legacy Claude Code image
     runs-on: ubuntu-latest
     permissions:
       contents: read

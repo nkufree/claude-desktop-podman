@@ -17,6 +17,8 @@ DEFAULTS = {
     'package_url': '', 'package_sha256': '', 'proxy': '',
     'apt_mirror': 'http://deb.debian.org',
     'keyring_password': 'fuckclaude',
+    'image_source': 'build',
+    'image_ref': 'ghcr.io/nkufree/claude-desktop-podman/claude-desktop:latest',
     'mounts': [],
     'ports': [],
 }
@@ -38,6 +40,13 @@ def validate(data):
     password = result['keyring_password']
     if not password or len(password) > 256 or any(c in password for c in '\x00\r\n'):
         raise ValueError('密钥环密码必须为 1–256 个字符，不能包含换行或空字符')
+    if result['image_source'] not in ('build', 'pull'):
+        raise ValueError('镜像来源必须为自行构建或预构建镜像')
+    image_pattern = (r'(?:localhost|[a-z0-9][a-z0-9.\-]*[a-z0-9])(?::[0-9]{1,5})?/'
+                     r'[a-z0-9]+(?:[._\-]+[a-z0-9]+)*(?:/[a-z0-9]+(?:[._\-]+[a-z0-9]+)*)*'
+                     r'(?::[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}|@sha256:[a-fA-F0-9]{64})?')
+    if not re.fullmatch(image_pattern, result['image_ref']):
+        raise ValueError('请填写完整镜像地址，例如 ghcr.io/nkufree/claude-desktop-podman/claude-desktop:latest，可固定标签或 SHA256 摘要')
     if result['resolution'] not in ('1280x800', '1440x900', '1600x1000', '1920x1080'):
         raise ValueError('请选择提供的桌面分辨率')
     tz = result['timezone']

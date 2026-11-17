@@ -5,6 +5,24 @@ let state, loaded = false, dirty = false, polling = false, activeView = 'overvie
 const csrf = $('meta[name="csrf-token"]').content;
 const operationNames = {start: '正在启动桌面', stop: '正在停止', rebuild: '正在构建镜像', machine: '正在准备虚拟机', setup: '正在配置 Podman 环境', logs: '正在读取日志', save: '正在保存容器'};
 
+function renderImageSource() {
+  const pull = form.elements.namedItem('image_source').value === 'pull';
+  $('#prebuilt-options').hidden = !pull;
+  $('#prebuilt-options').disabled = !pull;
+  $('#build-options').hidden = pull;
+  $('#build-options').disabled = pull;
+  $('#image-source-help').textContent = pull
+    ? '首次启动拉取预构建镜像，无需本机安装桌面依赖。更换镜像来源或地址后，下次启动会更新启动镜像。'
+    : '首次启动在本机自动构建，适合自定义安装版本或安装包。';
+  $('#image-launch-help').textContent = pull
+    ? '首次启动下载已构建好的桌面镜像，随后直接创建容器。登录仍在容器内部完成。'
+    : '首次启动自动构建镜像，安装桌面和 Claude。之后直接进入你的工作环境。';
+  document.querySelectorAll('[data-action="rebuild"]').forEach(button => {
+    button.textContent = pull ? '重新拉取镜像并启动' : '重建镜像并启动';
+  });
+}
+$('#image-source').addEventListener('change', renderImageSource);
+
 const passwordField = $('#keyring-password');
 const passwordToggle = $('#toggle-password');
 let passwordPinned = false, passwordHovered = false;
@@ -73,6 +91,10 @@ function notice(text, error = false) {
 }
 function readConfig() {
   const values = Object.fromEntries(new FormData(form));
+  // Preserve the other mode's settings while its fieldset is disabled.
+  for (const key of ['image_ref', 'apt_mirror', 'release', 'package_url', 'package_sha256']) {
+    values[key] = form.elements.namedItem(key).value;
+  }
   values.cpus = Number(values.cpus);
   values.memory = Number(values.memory);
   values.mounts = [...document.querySelectorAll('.mount-row')].map(row => ({
@@ -125,6 +147,7 @@ function populateConfig(values) {
       field.value = value;
     }
     loaded = true;
+    renderImageSource();
   }
 }
 function render(next) {
@@ -141,7 +164,7 @@ function render(next) {
   $('#machine-button').hidden = !env.installed || env.platform !== 'Darwin';
   $('#config-fields').disabled = state.busy;
   $('#save-button').disabled = state.busy;
-  const label = state.busy ? operationNames[state.operation] : {running: '运行中', starting: '桌面准备中', stopped: '未启动', exited: '已停止'}[state.state];
+  const label = state.busy ? (state.operation === 'rebuild' && state.config.image_source === 'pull' ? '正在拉取镜像' : operationNames[state.operation]) : {running: '运行中', starting: '桌面准备中', stopped: '未启动', exited: '已停止'}[state.state];
   $('#state-badge').textContent = label;
   $('#state-badge').className = `badge ${state.ready ? 'running' : state.busy ? 'working' : ''}`;
   $('#desktop-dot').classList.toggle('online', state.ready);
@@ -187,14 +210,15 @@ async function poll() {
 form.addEventListener('input', markDirty);
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  try { await saveConfig(); notice('配置已保存；下次启动时生效。修改安装源或版本后请重建镜像。'); }
+  try { await saveConfig(); notice('配置已保存；下次启动时生效。更换镜像来源或地址会更新启动镜像；同一来源下的已保存镜像继续使用。'); }
   catch (e) { notice(e.message, true); }
 });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => view(button.dataset.view)));
 document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
   const action = button.dataset.action;
   if (action === 'start' && state?.ready && !confirm('应用配置并重新创建桌面容器？请先保存桌面中正在编辑的文件，挂载目录会保留。')) return;
-  if (action === 'rebuild' && !confirm('将重新构建镜像并替换当前启动镜像及桌面容器。容器内保存的系统改动不会带入新镜像，登录数据卷会保留。继续？')) return;
+  const refresh = form.elements.namedItem('image_source').value === 'pull' ? '重新拉取镜像' : '重新构建镜像';
+  if (action === 'rebuild' && !confirm(`将${refresh}并替换当前启动镜像及桌面容器。容器内保存的系统改动不会带入新镜像，登录数据卷会保留。继续？`)) return;
   if (action === 'stop' && !confirm('停止桌面容器？请先保存桌面内正在编辑的文件。')) return;
   button.disabled = true;
   try {

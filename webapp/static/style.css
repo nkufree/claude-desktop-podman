@@ -54,6 +54,7 @@ header{height:77px;border-bottom:1px solid var(--line);display:flex;align-items:
 .panel-heading p{font-size:10px;color:#9b9e94;margin:0}
 .step-number{font:9px monospace;letter-spacing:1px;color:#9aa38b}
 fieldset{border:0;padding:6px 27px 18px;margin:0;min-width:0}
+fieldset#prebuilt-options,fieldset#build-options{padding:0}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:19px}
 label{display:block;font-size:11px;color:#62695b;margin:0 0 19px}
 input,select{display:block;width:100%;margin-top:10px;background:#fbfcf9;border:1px solid #e2e6da;border-radius:5px;color:#5f6857;padding:11px 12px;font-size:11px;min-height:38px}

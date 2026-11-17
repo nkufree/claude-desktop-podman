@@ -67,6 +67,8 @@ class Engine:
         self.config = config.load()
         saved_path = config.STATE / 'saved-image.json'
         self.saved_image = json.loads(saved_path.read_text()) if saved_path.exists() else None
+        origin_path = config.STATE / 'image-origin.json'
+        self.image_origin = json.loads(origin_path.read_text()) if origin_path.exists() else {'source': 'build', 'reference': ''}
         self._probe_cache = (0, {})
 
     def log(self, message):
@@ -148,6 +150,7 @@ class Engine:
                     'error': self.error or runtime_error, 'config': dict(self.config),
                     'logs': list(self.logs), 'container': NAME, 'image': IMAGE, 'volume': VOLUME,
                     'home_path': str(HOME_DIRECTORY),
+                    'image_origin': self.image_origin,
                     'saved_image': self.saved_image}
 
     def update(self, values):
@@ -272,11 +275,36 @@ class Engine:
         args += [str(config.ROOT / 'desktop')]
         self.log('构建 Debian / Xfce / Claude Desktop 镜像，首次下载可能需要数分钟…')
         self.stream(args, env=env)
+        self.record_image({'source': 'build', 'reference': ''})
+
+    def record_image(self, origin):
+        config.STATE.mkdir(mode=0o700, exist_ok=True)
+        path = config.STATE / 'image-origin.json'
+        temp = path.with_suffix('.tmp')
+        temp.write_text(json.dumps(origin) + '\n')
+        os.chmod(temp, 0o600)
+        temp.replace(path)
+        with self.lock:
+            self.image_origin = origin
         if self.saved_image:
             (config.STATE / 'saved-image.json').unlink(missing_ok=True)
             with self.lock:
                 self.saved_image = None
-            self.log('已使用新构建的启动镜像；以前保存的具名镜像仍保留在 Podman 中。')
+            self.log('已更新启动镜像；以前保存的具名镜像仍保留在 Podman 中。')
+
+    def pull(self):
+        if platform.system() == 'Darwin':
+            self.prepare_machine_proxy()
+        reference = self.config['image_ref']
+        env = os.environ.copy()
+        if self.config['proxy']:
+            for key in ('http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY'):
+                env[key] = self.config['proxy']
+        self.log('拉取预构建桌面镜像（Podman 自动选择当前系统架构）：' + reference)
+        self.stream(['pull', reference], env=env)
+        # Do not replace the startup image or container until the pull succeeds.
+        self.run(['tag', reference, IMAGE])
+        self.record_image({'source': 'pull', 'reference': reference})
 
     def prepare_machine_proxy(self):
         """Registry pulls happen in the VM service, before build-args apply."""
@@ -307,8 +335,13 @@ class Engine:
         for mount in self.config['mounts']:
             if not Path(mount['source']).is_dir():
                 raise RuntimeError('挂载目录不存在，请检查网页配置：' + mount['source'])
-        if rebuild or self.run(['image', 'exists', IMAGE], check=False).returncode:
-            self.build()
+        origin = {'source': self.config['image_source'],
+                  'reference': self.config['image_ref'] if self.config['image_source'] == 'pull' else ''}
+        if rebuild or self.image_origin != origin or self.run(['image', 'exists', IMAGE], check=False).returncode:
+            if self.config['image_source'] == 'pull':
+                self.pull()
+            else:
+                self.build()
         HOME_DIRECTORY.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         HOME_DIRECTORY.mkdir(mode=0o700, exist_ok=True)
         if old and not any(HOME_DIRECTORY.iterdir()):
@@ -398,7 +431,7 @@ class Engine:
         with self.lock:
             self.saved_image = saved
         self.log('容器已保存：' + tag)
-        self.log('下次启动使用此镜像，继续挂载原数据卷。重建镜像会重新安装桌面环境。')
+        self.log('下次启动使用此镜像，继续挂载原数据卷。更换镜像来源、重建或重新拉取会替换启动镜像。')
 
     def do_logs(self):
         data = self.inspect()

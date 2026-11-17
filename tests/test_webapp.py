@@ -15,6 +15,21 @@ from webapp.server import Server
 
 
 class ConfigTests(unittest.TestCase):
+    def test_image_source_defaults_and_reference_validation(self):
+        self.assertEqual(config.validate({})['image_source'], 'build')
+        reference = config.DEFAULTS['image_ref']
+        self.assertEqual(config.validate({'image_source': 'pull'})['image_ref'], reference)
+        for valid in (reference, 'ghcr.io/nkufree/desktop:sha-abcd',
+                      'registry.example:5000/team/desktop@sha256:' + 'a' * 64):
+            self.assertEqual(config.validate({'image_ref': valid})['image_ref'], valid)
+        for invalid in ('--authfile=/tmp/token', 'https://ghcr.io/team/desktop',
+                        'ghcr.io/team/desktop;echo', 'ghcr.io/team/desktop\n--tls-verify=false',
+                        'ghcr.io/team/desktop@sha256:invalid', 'claude-desktop:latest'):
+            with self.subTest(reference=invalid), self.assertRaises(ValueError):
+                config.validate({'image_source': 'pull', 'image_ref': invalid})
+        with self.assertRaises(ValueError):
+            config.validate({'image_source': 'unknown'})
+
     def test_rejects_invalid_settings(self):
         for bad in ({'cpus': True}, {'memory': 1}, {'cpus': '2'}, {'unknown': 1},
                     {'resolution': '12x34'}, {'timezone': '../../etc'},
@@ -223,6 +238,86 @@ class EngineTests(unittest.TestCase):
         self.assertIn('https_proxy=http://host.containers.internal:10808', args)
         self.assertIn('CLAUDE_RELEASE=v3.3.17', args)
         self.assertEqual(stream.call_args.kwargs['env']['HTTPS_PROXY'], 'http://127.0.0.1:10808')
+
+    def test_pull_uses_proxy_and_records_source_after_success(self):
+        self.engine.config.update(image_source='pull', proxy='http://127.0.0.1:10808')
+        self.engine.saved_image = {'image': 'old-snapshot'}
+        with patch('webapp.engine.platform.system', return_value='Darwin'), \
+             patch.object(self.engine, 'prepare_machine_proxy') as proxy, \
+             patch.object(self.engine, 'stream') as stream, patch.object(self.engine, 'run') as run:
+            self.engine.pull()
+        proxy.assert_called_once()
+        stream.assert_called_once()
+        self.assertEqual(stream.call_args.args[0], ['pull', self.engine.config['image_ref']])
+        self.assertEqual(stream.call_args.kwargs['env']['HTTPS_PROXY'], 'http://127.0.0.1:10808')
+        from webapp.engine import IMAGE
+        run.assert_called_once_with(['tag', self.engine.config['image_ref'], IMAGE])
+        self.assertEqual(self.engine.image_origin, {'source': 'pull', 'reference': self.engine.config['image_ref']})
+        self.assertEqual(json.loads((config.STATE / 'image-origin.json').read_text()), self.engine.image_origin)
+        self.assertIsNone(self.engine.saved_image)
+
+    def test_start_prepares_changed_source_before_replacing_container(self):
+        for source in ('pull', 'build'):
+            with self.subTest(source=source):
+                self.engine.config['image_source'] = source
+                self.engine.image_origin = {'source': 'pull' if source == 'build' else 'build', 'reference': 'old'}
+                events = []
+                result = type('Result', (), {'returncode': 0})()
+                with patch.object(self.engine, 'probe', return_value={'connected': True}), \
+                     patch.object(self.engine, 'inspect', side_effect=[{'State': {'Running': True}}, {'State': {'Running': True}}]), \
+                     patch.object(self.engine, 'desktop', return_value=True), \
+                     patch.object(self.engine, 'pull', side_effect=lambda: events.append('pull')), \
+                     patch.object(self.engine, 'build', side_effect=lambda: events.append('build')), \
+                     patch.object(self.engine, 'run', side_effect=lambda args, **kw: (events.append(args[0]), result)[1]):
+                    self.engine.do_start()
+                self.assertEqual(events[0], source)
+                self.assertLess(events.index(source), events.index('rm'))
+                self.assertNotIn('build' if source == 'pull' else 'pull', events)
+
+    def test_changed_remote_reference_triggers_pull(self):
+        self.engine.config['image_source'] = 'pull'
+        self.engine.image_origin = {'source': 'pull', 'reference': 'ghcr.io/nkufree/desktop:old'}
+        with patch.object(self.engine, 'probe', return_value={'connected': True}), \
+             patch.object(self.engine, 'inspect', side_effect=[None, {'State': {'Running': True}}]), \
+             patch.object(self.engine, 'desktop', return_value=True), \
+             patch.object(self.engine, 'run'), patch.object(self.engine, 'pull') as pull:
+            self.engine.do_start()
+        pull.assert_called_once()
+
+    def test_saved_pulled_image_is_reused_without_downloading(self):
+        self.engine.config['image_source'] = 'pull'
+        self.engine.image_origin = {'source': 'pull', 'reference': self.engine.config['image_ref']}
+        self.engine.saved_image = {'image': 'saved-snapshot'}
+        result = type('Result', (), {'returncode': 0})()
+        with patch.object(self.engine, 'probe', return_value={'connected': True}), \
+             patch.object(self.engine, 'inspect', side_effect=[None, {'State': {'Running': True}}]), \
+             patch.object(self.engine, 'desktop', return_value=True), \
+             patch.object(self.engine, 'run', return_value=result), \
+             patch.object(self.engine, 'pull') as pull, patch.object(self.engine, 'build') as build:
+            self.engine.do_start()
+        pull.assert_not_called()
+        build.assert_not_called()
+        self.assertEqual(self.engine.saved_image['image'], 'saved-snapshot')
+
+    def test_failed_pull_keeps_container_snapshot_and_source(self):
+        self.engine.config['image_source'] = 'pull'
+        self.engine.saved_image = {'image': 'saved-snapshot'}
+        original_origin = dict(self.engine.image_origin)
+        with patch.object(self.engine, 'probe', return_value={'connected': True}), \
+             patch.object(self.engine, 'inspect', return_value={'State': {'Running': True}}), \
+             patch.object(self.engine, 'stream', side_effect=RuntimeError('unauthorized')), \
+             patch.object(self.engine, 'run') as run, patch.object(self.engine, 'build') as build:
+            with self.assertRaisesRegex(RuntimeError, 'unauthorized'):
+                self.engine.do_rebuild()
+        run.assert_not_called()
+        build.assert_not_called()
+        self.assertEqual(self.engine.saved_image['image'], 'saved-snapshot')
+        self.assertEqual(self.engine.image_origin, original_origin)
+
+    def test_image_source_persists_across_service_restart(self):
+        origin = {'source': 'pull', 'reference': self.engine.config['image_ref']}
+        self.engine.record_image(origin)
+        self.assertEqual(Engine().image_origin, origin)
 
 
 class FakeEngine:
