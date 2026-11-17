@@ -121,7 +121,7 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(password_path.read_text(), self.engine.config['keyring_password'])
         self.assertEqual(password_path.stat().st_mode & 0o777, 0o600)
         self.assertFalse(any(self.engine.config['keyring_password'] in c for c in command))
-        self.assertFalse(any('/.claude' in c or '/.codex' in c or '5901:' in c for c in command))
+        self.assertFalse(any('/.claude' in c or '5901:' in c for c in command))
 
     def test_refuses_foreign_container(self):
         class Result:

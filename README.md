@@ -56,9 +56,9 @@ make check                           # 单元测试、HTTP/WebSocket 集成测�
 | 时区 | `America/New_York`，可改为 `America/Los_Angeles` 等 IANA 时区 |
 | 语言 | 桌面、Chromium 和 Claude 使用英文 `en_US.UTF-8` / `en-US` |
 | Debian 软件源 | `http://deb.debian.org`，可选 `http://mirrors.ustc.edu.cn`，APT 验证 Debian 签名 |
-| 安装版本 | `latest`，首次构建时解析 GitHub release；可填写固定 tag |
+| 安装版本 | `latest`，首次构建时解析 GitHub 发布版本；可填写固定版本标签 |
 | 自定义安装包 | 可选 HTTPS `.deb` 地址，应匹配主机 ARM64 / AMD64 架构 |
-| SHA256 | 可选校验值；GitHub 提供 digest 时自动校验 |
+| SHA256 | 可选校验值；GitHub 提供文件摘要时自动校验 |
 | 容器密钥环密码 | `fuckclaude`，可在网页自行修改；右侧按钮悬停显示明文，点击切换持续显示 / 隐藏 |
 | HTTP / HTTPS 代理 | 首次启动尝试读取环境变量和 macOS 系统 HTTP 代理，可在页面修改 |
 
@@ -70,7 +70,7 @@ make check                           # 单元测试、HTTP/WebSocket 集成测�
 
 **修改安装版本或安装包 URL 后，点击「重建镜像并启动」；仅修改 CPU、内存、时区、代理或分辨率时，重新启动桌面即可。** `latest` 不会在每次启动时自动升级已经构建的镜像。
 
-默认仅挂载专用的 `~/.claude_podman/desktop-home/`，其他工作目录由用户在网页中添加；不导入 `~/.claude`、宿主机浏览器资料或宿主机钥匙串。Linux 容器以非 root 用户运行，移除 capabilities，禁用新增权限。Electron/Chromium 使用 `--no-sandbox` 以适配容器环境，隔离边界由 Podman 提供。
+默认仅挂载专用的 `~/.claude_podman/desktop-home/`，其他工作目录由用户在网页中添加；不导入 `~/.claude`、宿主机浏览器资料或宿主机钥匙串。Linux 容器以非 root 用户运行，移除额外系统能力，禁用新增权限。Electron/Chromium 使用 `--no-sandbox` 以适配容器环境，隔离边界由 Podman 提供。
 
 ## 代理
 
@@ -115,7 +115,7 @@ ssh -L 8765:127.0.0.1:8765 user@host
 
 - **Podman 未安装**：macOS 使用 `brew install podman`。程序也会查找 `/opt/homebrew/bin`、`/usr/local/bin` 和 `~/.local/homebrew/bin` 下的 Podman。
 - **引擎未连接**：macOS 在页面启动虚拟机，或使用 `podman machine list` / `podman machine start`。已有虚拟机将被复用，不会修改其资源。
-- **镜像构建失败**：「运行日志」查看具体错误；检查代理、GitHub 访问限制及发行版依赖。可以指定固定 release 或自定义包地址后重建。
+- **镜像构建失败**：「运行日志」查看具体错误；检查代理、GitHub 访问限制及发行版依赖。可以指定固定发布版本或自定义包地址后重建。
 - **桌面可见但 Claude 未启动**：页面点击「获取容器日志」；在容器终端执行 `launch-claude` 查看错误。更新社区安装包可能需要调整依赖或启动命令。
 - **登录未回到 Claude**：允许 Chromium 打开 `claude://`，保持容器内 Claude 运行；不要将认证链接复制到宿主浏览器完成。
 - **密钥环提示密码**：默认密码为 `fuckclaude`，在网页「容器密钥环密码」中可自行修改，保存配置并重启后生效。启动时自动创建或解锁密钥环；已有密钥环需要先在桌面菜单的「Passwords and Keys」中右键 Login 密钥环 → Change Password，同步修改为新密码。修改网页配置不会重置已有密钥环，也不会清除登录资料。Claude 会等待密钥环就绪后启动，以便加密保存登录资料；取消后可双击桌面快捷方式重试。密钥环保存在宿主机专用 home 挂载目录，无需使用宿主机钥匙串。
@@ -132,6 +132,8 @@ desktop/              Debian 桌面 Containerfile、安装器、桌面启动脚�
 tests/                配置、容器命令、安全边界和双向代理测试
 ```
 
-原项目的 Claude Code / Codex 命令行启动器保留在 `bin/claude`、`bin/codex`，使用方法见 [旧版命令行文档](docs/legacy-cli.md)。它们和网页桌面使用独立镜像与登录存储。
+另保留 Claude Code 命令行启动器 `bin/claude`，使用方法见 [Claude Code 命令行说明](docs/legacy-cli.md)。该启动器与网页桌面使用独立镜像与登录存储。
 
-License: AGPL-3.0-or-later
+## 许可证
+
+本项目采用 [AGPL-3.0-or-later 许可证](https://www.gnu.org/licenses/agpl-3.0.html)。

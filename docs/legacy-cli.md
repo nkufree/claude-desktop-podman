@@ -1,345 +1,146 @@
-coding-agent-podman
-====
+# Claude Code 命令行说明
 
-Coding agents for the security-conscious: run
-[Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview)
-(Anthropic) or [Codex](https://developers.openai.com/codex) (OpenAI / ChatGPT)
-inside a rootless [podman](https://podman.io/) container.
+本文介绍 `bin/claude` 提供的旧版 Claude Code 命令行环境。需要网页配置、Linux 图形桌面或在容器浏览器中登录时，请使用主 [README](../README.md) 中的 `./bin/claude-desktop`。
 
-Each agent gets its own minimal Alpine image and its own launcher. Nothing is
-shared between them, and neither image contains anything the agent doesn't need.
+命令行启动器在无根 Podman 容器内运行 Claude Code，默认镜像为 `ghcr.io/evancarroll/coding-agent-podman/claude-code:latest`。每次启动检查更新；离线时使用已缓存的镜像。它与网页桌面的镜像、登录存储和配置相互独立。
 
-| Agent | Launcher | Image |
-| --- | --- | --- |
-| Claude Code | `claude-podman` | `ghcr.io/evancarroll/coding-agent-podman/claude-code` |
-| Codex | `codex-podman` | `ghcr.io/evancarroll/coding-agent-podman/codex` |
+## 安装与启动
 
-Both images are rebuilt daily against the current upstream release, and the
-launchers check the registry on every start (`--pull=newer`), so you always run
-the newest Claude Code / Codex without updating anything. Offline, they fall
-back to the image you already have.
-
-Installation
-----
-
-First [install podman](https://podman.io/docs/installation). Then install
-whichever launcher you want — they're single self-contained shell scripts.
-
-**Claude Code:**
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf \
-  https://raw.githubusercontent.com/EvanCarroll/coding-agent-podman/refs/heads/main/bin/claude |
-  sudo tee /usr/local/bin/claude-podman >/dev/null
-sudo chmod a+x /usr/local/bin/claude-podman
-```
-
-**Codex:**
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf \
-  https://raw.githubusercontent.com/EvanCarroll/coding-agent-podman/refs/heads/main/bin/codex |
-  sudo tee /usr/local/bin/codex-podman >/dev/null
-sudo chmod a+x /usr/local/bin/codex-podman
-```
-
-Or, from a clone of this repository, install both at once:
+先安装 [Podman](https://podman.io/docs/installation)，然后在项目目录执行：
 
 ```sh
 make install
+# 或仅安装 Claude Code 启动器
+make install-claude
+
+# 安装到用户目录，无需 sudo
+make PREFIX="$HOME/.local" SUDO=
 ```
 
-`make install` copies `bin/claude` and `bin/codex` to `/usr/local/bin/claude-podman` and
-`/usr/local/bin/codex-podman` — the same names the curl commands above use, so
-the two methods are interchangeable. `make install-claude` / `make install-codex`
-install just one, `make uninstall` removes them, and `PREFIX` or `BINDIR` retarget
-the destination (`make PREFIX=$HOME/.local SUDO=` needs no root).
+默认安装路径为 `/usr/local/bin/claude-podman`，可通过 `PREFIX` 或 `BINDIR` 修改。`make uninstall` 移除该启动器。
 
-Now just run `claude-podman` or `codex-podman` from the directory you want the
-agent to work in. Later, `claude-podman --self-update` / `codex-podman --self-update`
-refreshes the launcher itself.
-
-Benefits
-----
-
-The agent only gets file access to:
-
-| | Claude Code | Codex |
-| --- | --- | --- |
-| Working directory | `$PWD` | `$PWD` |
-| Credentials + config | `$HOME/.claude`, `$HOME/.claude.json` | `$HOME/.codex` |
-| Agent config (read-only) | `settings.json`, `CLAUDE.md`, `plugins/`, `agents/`, `commands/`, `skills/` under `~/.claude` | `config.toml`, `AGENTS.md`, `rules/` under `~/.codex` |
-| Git config (read-only) | `~/.gitconfig`, `~/.config/git/config` | `~/.gitconfig`, `~/.config/git/config` |
-
-Everything else in your home directory — SSH keys, cloud credentials, browser
-profiles, other projects — is simply not present in the container. The agent can
-only execute the files that exist in the image.
-
-Both images run under rootless podman *and* as a non-root user inside the
-container, with `--userns=keep-id` so files the agent creates in `$PWD` come out
-owned by you rather than by root. The agents are locked down hard enough that
-they can't even update themselves.
-
-The git config is there so commits carry your name and aliases work. It's
-mounted read-only, and any credential helpers it names (`gh`, `glab`, …) don't
-exist in the container, so the agent has no git credentials.
-
-The agent config is read-only because it's what the agent on your *host* runs
-code from (hooks, status lines, MCP servers, plugins, codex's `notify` and
-execpolicy rules) or takes instructions from. If it were writable, an agent in
-the container could plant something that runs outside the container the next
-time you use `claude` or `codex` directly. The rest of `~/.claude` and `~/.codex`
-(credentials, history, sessions) stays writable. Missing files and directories
-in that list are created empty on first run, so the agent can't create them
-either. The effect: change settings, install plugins and edit `CLAUDE.md` /
-`AGENTS.md` on the host, not from inside the container. Codex can't save its
-"trust this folder" answer to a read-only `config.toml`, so `codex-podman`
-records that trust itself when it starts in a new folder.
-
-What is still writable and can reach the host:
-
-- `~/.claude.json` holds Claude Code's user and per-project `mcpServers`, and
-  Claude rewrites the file constantly, so it can't be made read-only.
-- `$PWD` is your project. `.git/hooks`, `.git/config`, `.claude/`, `.codex/`,
-  `.mcp.json`, `.envrc`, `Makefile` and the like are all writable, and all run
-  on the host later. Review the diff before running anything in it outside the
-  container.
-
-Neither image ships `git` — see [Customizing the runtime](#customizing-the-runtime)
-if you want it.
-
-Signing in
-----
-
-**Claude Code** stores its credentials in `$HOME/.claude.json` and
-`$HOME/.claude`, both of which are mounted, so signing in once persists. There
-is no browser in the container, so `/login` falls back to printing a URL and
-asking you to paste back the code the site gives you. That works everywhere,
-but if you'd rather get the normal "browser opens, login completes" flow:
+进入要处理的项目目录后启动：
 
 ```sh
-# Option 1: log in once on the host (run claude, then /login). The token
-# lands in ~/.claude/.credentials.json, which the container mounts.
+claude-podman
+# 也可直接使用项目中的脚本
+./bin/claude
+```
+
+`claude-podman --self-update` 从原上游仓库更新启动器；本项目修改后的版本可通过重新执行 `make install` 安装。
+
+## 文件挂载与权限
+
+| 内容 | 宿主机路径 / 行为 |
+| --- | --- |
+| 工作目录 | 当前目录 `$PWD`，可读写 |
+| 登录资料和运行数据 | `$HOME/.claude`、`$HOME/.claude.json`，可读写 |
+| Claude 配置 | `~/.claude` 下的 `settings.json`、`CLAUDE.md`、`plugins/`、`agents/`、`commands/`、`skills/`，只读挂载 |
+| Git 配置 | `~/.gitconfig`、`~/.config/git/config`，存在时只读挂载 |
+
+容器以非 root 用户运行，通过 `--userns=keep-id` 保持工作目录中文件的宿主机所有权。未挂载的宿主机目录、SSH 密钥和浏览器资料不会自动出现在容器中。Git 配置用于保留提交署名和别名，不会自动提供宿主机的 Git 登录凭据。
+
+只读配置应在宿主机修改。工作目录、`~/.claude.json` 和其他可写挂载仍会影响宿主机文件；在宿主机执行容器修改过的项目脚本前，应检查改动。
+
+## 登录
+
+这个命令行容器没有浏览器。可使用以下任一方式登录：
+
+```sh
+# 在宿主机启动 Claude Code 后执行 /login，复用挂载的登录资料
 claude
 
-# Option 2: paste the code. No flags needed; works on remote/headless hosts.
+# 在容器中使用 /login，打开输出的网址并粘贴认证码
 claude-podman
 
-# Option 3: open the URL in your host browser and route the OAuth callback back
-# into the container. Requires pasta (podman's default since 5.0).
+# 使用宿主机浏览器，并转发 OAuth 回调到容器
 claude-podman --login
 ```
 
-`--login` is more involved than codex's, because claude's callback server
-listens on a *random* port. The launcher sets `$BROWSER` in the container to a
-script that hands the URL to the host, which opens it with `xdg-open` (or
-prints it if there's no `xdg-open`), and runs pasta with `-t auto` so whatever
-port claude binds is forwarded from the host. That forwards *every* port the
-container listens on, on all of the host's IPv4 addresses, and turns IPv6 off
-for the session, so use `--login` to log in and then restart without it.
+`--login` 需要支持相应参数的 pasta 网络后端。Claude 的回调使用随机端口，启动器通过 `pasta -t auto` 转发容器监听端口，并关闭该会话的 IPv6。该模式会在宿主机 IPv4 地址上转发容器监听的所有端口，登录后应退出并以普通模式重新启动。
 
-**Codex** is slightly awkward the first time. `codex login` starts a server on
-`localhost:1455` and waits for your browser to deliver an OAuth callback to it.
-Because codex binds that server to the container's loopback address, publishing
-the port alone is not enough — pasta hands inbound connections to the
-container's public address, so the browser gets a connection reset. Three ways
-around it:
+网页桌面具有自己的容器浏览器，登录方式见主 README，无需先在宿主机登录。
 
-```sh
-# Option 1 (simplest): log in once on the host. The token lands in
-# ~/.codex/auth.json, which the container mounts.
-codex login
+## 运行选项
 
-# Option 2: no callback port at all — codex prints a code to enter in your
-# browser. Good for remote or headless hosts.
-codex-podman login --device-auth
+| 选项 | 作用 |
+| --- | --- |
+| `--local` | 使用本地构建的 `claude-code:latest` 镜像 |
+| `--apk-packages LIST` | 启动时安装额外 Alpine 软件包，以逗号或空格分隔 |
+| `--init-script FILE` | 将初始化脚本复制到容器并以 root 身份执行 |
+| `--podman-arg ARG` | 向 `podman run` 添加一个参数，可重复使用 |
+| `--self-update` | 从原上游 GitHub 仓库更新启动器 |
+| `--help` | 显示用法 |
+| `--yolo` | 传入 `--dangerously-skip-permissions` 并跳过一次性提示，容器成为主要隔离边界 |
+| `--login` | 打开宿主机浏览器并转发随机 OAuth 回调端口 |
 
-# Option 3: publish the callback port and route it to the container's loopback,
-# which is what --login now does. Requires pasta (podman's default since 5.0).
-codex-podman --login login
-```
+启动器选项必须放在 Claude 参数前面。第一个无法识别的参数及后续参数会原样传给 Claude。
 
-After either, `~/.codex/auth.json` exists and `codex-podman` just works. An
-`OPENAI_API_KEY` also works if you'd rather not use OAuth at all:
+默认保留 Claude 的权限确认行为，用户自身的 `permissions` 或 `defaultMode` 配置仍会生效。`--yolo` 会取消权限提示，可写挂载内容也会随之允许修改。
+
+额外软件包和初始化脚本会在每次启动时执行；失败时停止启动。参考 [examples/init.sh](../examples/init.sh) 编写初始化脚本。
 
 ```sh
-codex-podman --podman-arg "--env=OPENAI_API_KEY=$OPENAI_API_KEY"
-```
-
-Sandboxing
-----
-
-By default both agents still ask before doing anything risky, as they do outside
-a container. `--yolo` turns that off for either one.
-
-| | Claude default | Claude `--yolo` | Codex default | Codex `--yolo` |
-| --- | --- | --- | --- | --- |
-| Passed to the agent | nothing | `--dangerously-skip-permissions --settings '{"skipDangerousModePermissionPrompt":true}'` | `-c sandbox_mode="workspace-write" -c approval_policy="on-request"` | `-c sandbox_mode="danger-full-access" -c approval_policy="never"` |
-| What holds it back | permission prompts | nothing but the container | codex's sandbox (bubblewrap), prompts to leave it | nothing but the container |
-| Edits in `$PWD` | asks | allowed | allowed | allowed |
-| Shell commands | read-only ones run, the rest ask | allowed | run inside the sandbox | allowed |
-| Writes elsewhere in the container | asks | allowed | asks | allowed |
-| Network | allowed once the command or fetch is approved | allowed | asks | allowed |
-| "Don't ask again" | saved to `$PWD/.claude/settings.local.json`, so your host claude also honors it | n/a | this session only (`~/.codex/rules/` is read-only) | n/a |
-
-The two defaults differ in how they hold the agent back. Claude asks before each
-action and has no sandbox, so once you approve a command it can do anything the
-container allows, network included. Codex runs commands without asking but
-inside its sandbox, and asks only when a command needs to leave it: to write
-outside the workspace or reach the network. Your own settings still apply on
-top: a `permissions` block or `defaultMode` in `~/.claude/settings.json` changes
-what Claude asks about.
-
-The two `--yolo` modes end up the same: no prompts, no sandbox inside the
-container, full network. The difference is only what gets switched off. Claude
-never had a sandbox, so `--yolo` just drops its prompts, and the launcher also
-skips its one-time warning dialog. Codex loses its sandbox and its prompts. In
-both, the container is the only boundary, and whatever stays writable (see
-[Benefits](#benefits): `$PWD`, `~/.claude.json`, the rest of `~/.codex`) is
-open to the agent without a prompt.
-
-`codex-podman` passes codex's defaults explicitly even though codex would pick
-them anyway: without any `-c`, codex starts a background server, which can't
-run under podman.
-
-Customizing the runtime
-----
-
-Need to add packages to the container, or run an init script? No problem — both
-launchers support the same options.
-
-```
---apk-packages foo,bar,baz # adds packages foo, bar, baz, with apk
---init-script  ./foobar.sh # copies foobar.sh into the container and runs it as root
---podman-arg   ARG         # passes ARG to podman run as ONE argument (repeatable)
-```
-
-Neither image includes `git`, so a common one is:
-
-```sh
+# 镜像默认未安装 git
 claude-podman --apk-packages git
-```
 
-For example, let's say you're using kubernetes and you do want the agent to be
-able to troubleshoot it:
-
-```sh
+# 安装 kubectl，并只读挂载 Kubernetes 配置
 claude-podman \
-	--apk-packages kubectl \
-	--podman-arg "--volume=$HOME/.kube/config:/home/claude/.kube/config:ro"
+  --apk-packages kubectl \
+  --podman-arg "--volume=$HOME/.kube/config:/home/claude/.kube/config:ro"
+
+# 从管道传入内容
+git diff | claude-podman -p "审查这些改动"
 ```
 
-The same for codex — note the different home directory inside the container:
+每次 `--podman-arg` 只传递一个参数，例如 `--podman-arg "--volume=/path:/workspace"`；也可用 `--podman-arg -v --podman-arg /path:/workspace`。不要将 `-v /path:/workspace` 拼成一个参数。
+
+Claude 退出、终端关闭或初始化时按 Ctrl+C 后，临时容器会被删除；挂载目录中的资料会保留。
+
+## 本地构建与自定义镜像
+
+命令行镜像使用 Buildah 构建，宿主机还需要 npm 和 jq：
 
 ```sh
-codex-podman \
-	--apk-packages kubectl \
-	--podman-arg "--volume=$HOME/.kube/config:/home/codex/.kube/config:ro"
-```
+make legacy-images
+# 等同于
+make image-claude
+# 也可直接执行
+./devops/build-claude.sh
 
-See `examples/init.sh` for an `--init-script` template. Packages are
-installed and init scripts run on every start, so for anything heavy, like a
-language toolchain, bake it into the image instead; see
-[Customizing the image](#customizing-the-image).
-
-Options
-----
-
-| Option | Claude | Codex | Description |
-| --- | :---: | :---: | --- |
-| `--local` | ✓ | ✓ | Use the locally built image instead of pulling from ghcr.io |
-| `--apk-packages LIST` | ✓ | ✓ | Install extra Alpine packages (comma or space separated) |
-| `--init-script FILE` | ✓ | ✓ | Copy FILE into the container and run it as root |
-| `--podman-arg ARG` | ✓ | ✓ | Pass one extra argument to `podman run` (repeatable; use `--flag=value` forms) |
-| `--self-update` | ✓ | ✓ | Replace the installed launcher with the latest from GitHub |
-| `--help` | ✓ | ✓ | Show usage |
-| `--yolo` | ✓ | ✓ | No permission prompts; for codex, also no sandbox inside the container |
-| `--login` | ✓ | ✓ | Make browser OAuth login work: codex's fixed port 1455, or for Claude, open the URL on the host and forward its random callback port |
-
-Launcher options must come first: the first unrecognized argument, and
-everything after it, is forwarded to the agent itself.
-
-Each `--podman-arg` is passed as exactly one argument, so paths with spaces
-work, but `"-v a:b"` does not. Write `"--volume=a:b"` or repeat the option
-(`--podman-arg -v --podman-arg a:b`).
-
-Packages and `--init-script` are installed before the agent starts, and a
-failure stops the launch. The container is removed when the agent exits,
-you close the terminal, or you press Ctrl-C during setup. Without a terminal,
-the launchers run the agent non-interactively, so pipes work:
-
-```sh
-git diff | claude-podman -p "review this diff"
-```
-
-Building locally
-----
-
-Images are built by [buildah](https://buildah.io/) scripts, not from a
-Containerfile. From a clone:
-
-```sh
-make legacy-images   # or make image-claude / make image-codex
-```
-
-That runs `./devops/build-claude.sh` and `./devops/build-codex.sh`, which you
-can also run directly. Each prints exactly one line on stdout (the image
-reference, e.g. `claude-code:<version>`) so CI can consume it; all other output
-goes to stderr. Then run against the local build:
-
-```sh
 claude-podman --local
-codex-podman --local
 ```
 
-### Customizing the image
+构建脚本仅向标准输出打印镜像引用（例如 `claude-code:<版本>`），其他日志写入标准错误，供自动构建流程读取。
 
-`--apk-packages` and `--init-script` run on every start, which is fine for a
-package or two but far too slow for a toolchain. To bake one in, layer a
-Containerfile of your own under the images. For example, Rust nightly:
+安装编译工具链等较大的依赖时，建议写入自定义基础镜像：
 
 ```sh
 make legacy-images CONTAINERFILE=examples/Containerfile.rust-nightly
 claude-podman --local
 ```
 
-Copy it to `./Containerfile` (gitignored, so it stays yours) and a plain
-`make legacy-images` picks it up; `make legacy-images CONTAINERFILE=` builds the stock images
-again. Start your own with:
+也可将自己的文件放在项目根目录 `Containerfile`（已忽略，不纳入 Git），`make legacy-images` 会自动使用它。指定 `CONTAINERFILE=` 可恢复原始基础镜像。自定义文件可从以下内容开始：
 
-```containerfile
+```dockerfile
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 ```
 
-The build fills in each agent's usual Alpine base (`node:current-alpine` for
-Claude Code, `alpine:latest` for Codex), so one file serves both. The agent is
-installed on top, so keep it Alpine and don't add users; the agents claim uids
-1000 and 1001. A hardcoded `FROM` works too, but then that base has to meet
-those needs itself, including npm for Claude Code.
+默认基础镜像为 `node:current-alpine`，Claude Code 安装在自定义层之上。保留 Alpine 和 npm 环境，避免占用基础镜像的 UID 1000 和 Claude 用户的 UID 1001。
 
-The build scripts read the same settings from the environment, and CI sets
-none of them:
-
-| Variable | Effect |
+| 环境变量 | 作用 |
 | --- | --- |
-| `BASE_IMAGE` | Build on this image instead of the agent's usual base |
-| `CONTAINERFILE` | Build this file on `BASE_IMAGE` first, then the agent on the result |
-| `NO_CACHE=1` | Rebuild the Containerfile from scratch; its steps are otherwise cached for up to a week |
+| `BASE_IMAGE` | 替换默认基础镜像 |
+| `CONTAINERFILE` | 先在基础镜像上构建自定义层，再安装 Claude Code |
+| `NO_CACHE=1` | 忽略自定义层缓存重新构建；默认缓存有效期为一周 |
 
-A custom build replaces your local `claude-code:latest` / `codex:latest`, so
-`--local` runs whichever you built last.
-
-Cargo's download cache lives in the container and goes when it does. To keep
-it between sessions, give it a named volume rather than mounting your own
-`~/.cargo`, which holds your crates.io token and binaries your host runs (for
-codex, the path is `/home/codex/.cargo`):
+自定义构建会替换本地 `claude-code:latest`，之后 `--local` 使用最后构建的版本。保留 Cargo 下载缓存时，可使用独立具名卷：
 
 ```sh
 claude-podman --local --podman-arg "--volume=cargo-home:/home/claude/.cargo:U"
 ```
 
-License
-----
+## 许可证
 
-AGPL-3.0-or-later
+本项目采用 [AGPL-3.0-or-later 许可证](https://www.gnu.org/licenses/agpl-3.0.html)。

@@ -5,7 +5,7 @@
 #
 # If CONTAINERFILE names a file, it is built on top of BASE_IMAGE (handed to it
 # as the build arg of the same name) and the agent is installed on the result
-# instead. `make images` sets it when ./Containerfile exists; CI runs the build
+# instead. `make legacy-images` sets it when ./Containerfile exists; CI runs the build
 # scripts directly and never sets it, so its images come from the stock base.
 #
 # Keep this straight-line: the callers rely on set -e to stop at a failed
@@ -29,7 +29,7 @@ if [ -n "${CONTAINERFILE:-}" ]; then
 		"$(dirname "$CONTAINERFILE")"
 	BASE_IMAGE="localhost/${IMAGE}-base"
 elif [ -z "${CONTAINERFILE+set}" ] && [ -f "$(dirname "$0")/../Containerfile" ]; then
-	echo "Note: ./Containerfile is only layered in by 'make images' (or CONTAINERFILE=...)"
+	echo "Note: ./Containerfile is only layered in by 'make legacy-images' (or CONTAINERFILE=...)"
 fi
 
 echo "Building ${IMAGE} on ${BASE_IMAGE}${CONTAINERFILE:+ (from $CONTAINERFILE)}"

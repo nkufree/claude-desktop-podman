@@ -1,14 +1,14 @@
-# Rust nightly (plus git, ssh and ripgrep) under the agent images. Use it in
+# Rust nightly (plus git, ssh and ripgrep) under the Claude Code image. Use it in
 # place:
 #
-#   make images CONTAINERFILE=examples/Containerfile.rust-nightly
+#   make legacy-images CONTAINERFILE=examples/Containerfile.rust-nightly
 #
-# or copy it to ./Containerfile (gitignored), which a plain `make images` picks
-# up. Then run `claude-podman --local` or `codex-podman --local`.
+# or copy it to ./Containerfile (gitignored), which a plain `make legacy-images` picks
+# up. Then run `claude-podman --local`.
 #
-# BASE_IMAGE is filled in by the build scripts with each agent's usual Alpine
-# base, so this one file serves both. The agent is installed on top of it, so
-# keep it Alpine and don't add users: the agents claim uids 1000 and 1001.
+# BASE_IMAGE is filled in by the build script with Claude Code's Alpine base.
+# Claude Code is installed on top, so keep it Alpine and do not add users:
+# the node base uses uid 1000 and Claude Code uses uid 1001.
 #
 # Anything the agent installs at run time is gone when its container exits, so
 # bake in what your projects pin: a dated nightly from rust-toolchain.toml, or

@@ -16,11 +16,6 @@ jobs:
       contents: read
       packages: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        agent: [ claude, codex ]
-
     env:
       STORAGE_DRIVER: vfs
 
@@ -39,8 +34,8 @@ jobs:
     - name: Build image with buildah script
       id: build
       run: |
-        # The build scripts print exactly one line on stdout: "<image>:<version>"
-        REF=$(./devops/build-${{ matrix.agent }}.sh)
+        # The build script prints exactly one line on stdout: "<image>:<version>"
+        REF=$(./devops/build-claude.sh)
         echo "image=${REF%%:*}" >> "$GITHUB_OUTPUT"
         echo "version=${REF##*:}" >> "$GITHUB_OUTPUT"
 

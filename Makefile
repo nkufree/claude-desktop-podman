@@ -1,45 +1,37 @@
-# Start the browser desktop, build its image, or install the legacy CLI tools.
+# 启动网页桌面、构建镜像或安装 Claude Code 命令行工具。
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
 INSTALL ?= install
 
-# /usr/local/bin is root-owned, so the copy is elevated. Override with
-# `make SUDO=` when running as root or installing into a prefix you own,
-# e.g. `make PREFIX=$$HOME/.local SUDO=`.
+# 默认安装到系统目录；安装到用户目录可使用 make PREFIX=$$HOME/.local SUDO=。
 SUDO ?= sudo
 
-# A Containerfile of your own to layer under both images: ./Containerfile
-# (gitignored) if it exists, or name one, e.g.
-# `make legacy-images CONTAINERFILE=examples/Containerfile.rust-nightly`.
-# `make legacy-images CONTAINERFILE=` builds the stock CLI images. CI runs the build
-# scripts directly, so it never picks this up.
+# 仅用于旧版 Claude Code 镜像；网页桌面使用 desktop/Containerfile。
+# make legacy-images CONTAINERFILE=examples/Containerfile.rust-nightly
+# make legacy-images CONTAINERFILE= 可使用原始基础镜像。
 CONTAINERFILE ?= $(wildcard Containerfile)
 export CONTAINERFILE
 
-.PHONY: all serve install install-claude install-codex uninstall images legacy-images image-desktop image-claude image-codex check help
+.PHONY: all serve install install-claude uninstall images legacy-images image-desktop image-claude check help
 
 all: serve
 
 serve:
 	./bin/claude-desktop
 
-install: install-claude install-codex
+install: install-claude
 
 install-claude: bin/claude
 	$(SUDO) $(INSTALL) -D -m 755 bin/claude $(BINDIR)/claude-podman
-	@echo "installed $(BINDIR)/claude-podman"
-
-install-codex: bin/codex
-	$(SUDO) $(INSTALL) -D -m 755 bin/codex $(BINDIR)/codex-podman
-	@echo "installed $(BINDIR)/codex-podman"
+	@echo "已安装 $(BINDIR)/claude-podman"
 
 uninstall:
-	$(SUDO) rm -f $(BINDIR)/claude-podman $(BINDIR)/codex-podman
+	$(SUDO) rm -f $(BINDIR)/claude-podman
 
 images: image-desktop
 
-legacy-images: image-claude image-codex
+legacy-images: image-claude
 
 image-desktop:
 	python3 -c 'from webapp.engine import Engine; Engine(on_log=print).build()'
@@ -47,34 +39,27 @@ image-desktop:
 image-claude:
 	./devops/build-claude.sh
 
-image-codex:
-	./devops/build-codex.sh
-
-# Functional backend checks plus parse-only checks for shell and Python.
+# 后端功能测试，以及 Python 和 Shell 语法检查。
 check:
 	python3 -m unittest discover -s tests -v
 	python3 -m py_compile webapp/*.py desktop/*.py
 	sh -n bin/claude-desktop
 	for script in desktop/*.sh; do bash -n "$$script" || exit; done
 	bash -n bin/claude
-	bash -n bin/codex
 	sh -n devops/base-image.sh
 	sh -n devops/build-claude.sh
-	sh -n devops/build-codex.sh
-	@echo "ok"
+	@echo "检查通过"
 
 help:
-	@echo "make [all] / serve  start the local desktop web console"
-	@echo "make image-desktop  build the Debian / Xfce / Claude Desktop image"
-	@echo "make legacy-images  build both legacy CLI images"
-	@echo "make install        install legacy CLI launchers into $(BINDIR)"
-	@echo "make install-claude install claude-podman only"
-	@echo "make install-codex  install codex-podman only"
-	@echo "make uninstall      remove both from $(BINDIR)"
-	@echo "make images         build the desktop image"
-	@echo "make image-claude   build the claude-code image only"
-	@echo "make image-codex    build the codex image only"
-	@echo "make check          run backend tests and syntax checks"
+	@echo "make [all] / serve  启动本地桌面网页控制台"
+	@echo "make image-desktop  构建 Debian / Xfce / Claude Desktop 镜像"
+	@echo "make images         同 make image-desktop"
+	@echo "make legacy-images  构建旧版 Claude Code 命令行镜像"
+	@echo "make image-claude   同 make legacy-images"
+	@echo "make install        安装 Claude Code 启动器到 $(BINDIR)"
+	@echo "make install-claude 同 make install"
+	@echo "make uninstall      从 $(BINDIR) 移除 Claude Code 启动器"
+	@echo "make check          运行后端测试和语法检查"
 	@echo ""
-	@echo "Variables: PREFIX (default /usr/local), BINDIR, SUDO (set empty to skip sudo)"
-	@echo "Images:    CONTAINERFILE (default ./Containerfile if present), BASE_IMAGE, NO_CACHE=1"
+	@echo "安装变量：PREFIX（默认 /usr/local）、BINDIR、SUDO（留空可跳过 sudo）"
+	@echo "旧版镜像变量：CONTAINERFILE、BASE_IMAGE、NO_CACHE=1"

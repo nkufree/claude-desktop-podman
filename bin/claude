@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--login)
 		# claude's OAuth callback server listens on a *random* port on
-		# 127.0.0.1 inside the container, so a fixed -p (as codex-podman uses)
+		# 127.0.0.1 inside the container, so a fixed port mapping
 		# can't work. pasta's "-t auto" forwards whatever port gets bound, and
 		# --host-lo-to-ns-lo lands it on the container's loopback, where the
 		# listener is. -4 matters: with IPv6 on, the browser's "localhost"
