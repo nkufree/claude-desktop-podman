@@ -1,3 +1,7 @@
 **/.claude/settings.local.json
-# Your own base layer for `make images`; see "Customizing the image" in README.md.
+# Your own base layer for `make legacy-images`; see docs/legacy-cli.md.
 /Containerfile
+/.desktop-state/
+__pycache__/
+*.pyc
+.DS_Store

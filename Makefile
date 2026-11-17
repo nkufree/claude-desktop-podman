@@ -1,9 +1,4 @@
-# Install the launchers, or build the images they run.
-#
-# Both launchers are single self-contained shell scripts, so "install" just
-# copies them into place under the names their own --self-update expects to
-# overwrite. "images" builds the claude-code and codex images locally, for the
-# launchers' --local.
+# Start the browser desktop, build its image, or install the legacy CLI tools.
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
@@ -16,15 +11,18 @@ SUDO ?= sudo
 
 # A Containerfile of your own to layer under both images: ./Containerfile
 # (gitignored) if it exists, or name one, e.g.
-# `make images CONTAINERFILE=examples/Containerfile.rust-nightly`.
-# `make images CONTAINERFILE=` builds the stock images. CI runs the build
+# `make legacy-images CONTAINERFILE=examples/Containerfile.rust-nightly`.
+# `make legacy-images CONTAINERFILE=` builds the stock CLI images. CI runs the build
 # scripts directly, so it never picks this up.
 CONTAINERFILE ?= $(wildcard Containerfile)
 export CONTAINERFILE
 
-.PHONY: all install install-claude install-codex uninstall images image-claude image-codex check help
+.PHONY: all serve install install-claude install-codex uninstall images legacy-images image-desktop image-claude image-codex check help
 
-all: install
+all: serve
+
+serve:
+	./bin/claude-desktop
 
 install: install-claude install-codex
 
@@ -39,7 +37,12 @@ install-codex: bin/codex
 uninstall:
 	$(SUDO) rm -f $(BINDIR)/claude-podman $(BINDIR)/codex-podman
 
-images: image-claude image-codex
+images: image-desktop
+
+legacy-images: image-claude image-codex
+
+image-desktop:
+	python3 -c 'from webapp.engine import Engine; Engine(on_log=print).build()'
 
 image-claude:
 	./devops/build-claude.sh
@@ -47,8 +50,12 @@ image-claude:
 image-codex:
 	./devops/build-codex.sh
 
-# Parse-only check; catches syntax errors without running anything.
+# Functional backend checks plus parse-only checks for shell and Python.
 check:
+	python3 -m unittest discover -s tests -v
+	python3 -m py_compile webapp/*.py desktop/*.py
+	sh -n bin/claude-desktop
+	for script in desktop/*.sh; do bash -n "$$script" || exit; done
 	bash -n bin/claude
 	bash -n bin/codex
 	sh -n devops/base-image.sh
@@ -57,14 +64,17 @@ check:
 	@echo "ok"
 
 help:
-	@echo "make [all]          install both launchers into $(BINDIR)"
+	@echo "make [all] / serve  start the local desktop web console"
+	@echo "make image-desktop  build the Debian / Xfce / Claude Desktop image"
+	@echo "make legacy-images  build both legacy CLI images"
+	@echo "make install        install legacy CLI launchers into $(BINDIR)"
 	@echo "make install-claude install claude-podman only"
 	@echo "make install-codex  install codex-podman only"
 	@echo "make uninstall      remove both from $(BINDIR)"
-	@echo "make images         build both images locally, for --local"
+	@echo "make images         build the desktop image"
 	@echo "make image-claude   build the claude-code image only"
 	@echo "make image-codex    build the codex image only"
-	@echo "make check          syntax-check the launchers and build scripts"
+	@echo "make check          run backend tests and syntax checks"
 	@echo ""
 	@echo "Variables: PREFIX (default /usr/local), BINDIR, SUDO (set empty to skip sudo)"
 	@echo "Images:    CONTAINERFILE (default ./Containerfile if present), BASE_IMAGE, NO_CACHE=1"

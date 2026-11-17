@@ -1,0 +1,9 @@
+button-title=Start
+button-icon=view-grid-symbolic
+show-button-title=false
+show-button-icon=true
+favorites=claude-container.desktop,container-browser.desktop,thunar.desktop,xfce4-terminal.desktop
+menu-width=600
+menu-height=560
+position-search-alternate=true
+position-categories-alternate=true

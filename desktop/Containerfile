@@ -1,0 +1,50 @@
+FROM docker.io/library/debian:bookworm-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG APT_MIRROR=http://deb.debian.org
+RUN sed -i "s|http://deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl python3 procps xfce4 xfce4-terminal dbus-x11 \
+    tigervnc-standalone-server tigervnc-tools novnc websockify \
+    chromium chromium-sandbox xdg-utils desktop-file-utils \
+    gnome-keyring seahorse libsecret-1-0 libsecret-tools libnss3 libgbm1 libasound2 \
+    fonts-noto-cjk fonts-noto-color-emoji locales tzdata tini \
+    gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf \
+    papirus-icon-theme xfce4-whiskermenu-plugin librsvg2-common \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY install-theme.py /usr/local/lib/install-theme.py
+RUN python3 /usr/local/lib/install-theme.py
+
+ARG CLAUDE_RELEASE=latest
+ARG CLAUDE_DEB_URL=
+ARG CLAUDE_DEB_SHA256=
+COPY install-claude.py /usr/local/lib/install-claude.py
+# Refresh the application on an explicit rebuild while retaining the desktop layer.
+ARG CLAUDE_INSTALL_REV=0
+RUN python3 /usr/local/lib/install-claude.py \
+    && apt-get update && apt-get install -y --no-install-recommends /tmp/claude-desktop.deb \
+    && rm -f /tmp/claude-desktop.deb && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --uid 1000 --shell /bin/bash claude \
+    && mkdir -p /home/claude/.config && chown -R claude:claude /home/claude
+COPY start-desktop.sh /usr/local/bin/start-desktop
+COPY launch-claude.sh /usr/local/bin/launch-claude
+COPY launch-browser.sh /usr/local/bin/launch-browser
+COPY configure-desktop.sh /usr/local/bin/configure-desktop
+COPY windows-style /usr/local/share/claude-podman/windows-style
+COPY claude.desktop /usr/share/applications/claude-container.desktop
+RUN chmod 755 /usr/local/bin/start-desktop /usr/local/bin/launch-claude /usr/local/bin/launch-browser /usr/local/bin/configure-desktop \
+    && printf '[Desktop Entry]\nType=Application\nName=Container Browser\nExec=/usr/local/bin/launch-browser %%U\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\n' \
+       > /usr/share/applications/container-browser.desktop \
+    && update-desktop-database /usr/share/applications
+
+ENV HOME=/home/claude DISPLAY=:1 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US:en TZ=America/New_York \
+    DESKTOP_RESOLUTION=1920x1080 BROWSER=/usr/local/bin/launch-browser
+USER claude
+WORKDIR /home/claude
+EXPOSE 6080
+HEALTHCHECK --interval=20s --start-period=30s --timeout=5s \
+    CMD curl -fsS http://127.0.0.1:6080/vnc.html > /dev/null || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-desktop"]
