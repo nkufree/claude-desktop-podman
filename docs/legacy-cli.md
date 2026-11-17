@@ -2,7 +2,7 @@
 
 本文介绍 `bin/claude` 提供的旧版 Claude Code 命令行环境。需要网页配置、Linux 图形桌面或在容器浏览器中登录时，请使用主 [README](../README.md) 中的 `./bin/claude-desktop`。
 
-命令行启动器在无根 Podman 容器内运行 Claude Code，默认镜像为 `ghcr.io/evancarroll/coding-agent-podman/claude-code:latest`。每次启动检查更新；离线时使用已缓存的镜像。它与网页桌面的镜像、登录存储和配置相互独立。
+命令行启动器在无根 Podman 容器内运行 Claude Code，默认镜像为本仓库发布的 `ghcr.io/nkufree/claude-desktop-podman/claude-code:latest`。每次启动检查更新；离线时使用已缓存的镜像。它与网页桌面的镜像、登录存储和配置相互独立。
 
 ## 安装与启动
 
@@ -27,7 +27,7 @@ claude-podman
 ./bin/claude
 ```
 
-`claude-podman --self-update` 从原上游仓库更新启动器；本项目修改后的版本可通过重新执行 `make install` 安装。
+`claude-podman --self-update` 从本仓库更新启动器，也可通过重新执行 `make install` 安装。
 
 ## 文件挂载与权限
 
@@ -98,6 +98,8 @@ git diff | claude-podman -p "审查这些改动"
 Claude 退出、终端关闭或初始化时按 Ctrl+C 后，临时容器会被删除；挂载目录中的资料会保留。
 
 ## 本地构建与自定义镜像
+
+预构建 package 的发布由 GitHub Actions 完成，无需在本地构建。完整步骤（基础镜像、安装 Claude Code、创建用户、设置入口、提交镜像、版本标签和 GHCR 推送命令）见 [镜像构建与发布全过程](build-images.md)。下方仅保留用户需要自定义本地镜像时的用法。
 
 命令行镜像使用 Buildah 构建，宿主机还需要 npm 和 jq：
 

@@ -67,6 +67,8 @@ make check                           # 单元测试、HTTP/WebSocket 集成测�
 
 主分支更新、定时任务和手动触发会通过 GitHub Actions 在原生 AMD64、ARM64 runner 构建桌面，两个架构都成功后才发布多架构 `latest` 和提交标签。新 package 首次发布默认为私有时，仓库所有者需在 package 设置中将可见性改为 Public，才能免登录拉取；私有包先在宿主机终端执行 `podman login ghcr.io`，网页不保存仓库令牌。
 
+构建只需在 GitHub [Build and Push Images](https://github.com/nkufree/claude-desktop-podman/actions/workflows/build-and-push.yml) 中点击 **Run workflow**。`claude-code` 和桌面镜像的全部构建步骤、命令、标签及推送过程见 [镜像构建与发布全过程](docs/build-images.md)，该文档地址也写入镜像的 Package 元数据。
+
 同一来源下普通启动复用本地镜像和最近保存的容器快照，不会每次下载 `latest`。「重新拉取镜像并启动」会更新预构建镜像；「重建镜像并启动」会按本机设置重新构建。更换镜像来源或地址后，下一次启动会更新启动镜像。新镜像准备失败时保留当前容器，不会自动改用另一种方式。更换或刷新启动镜像会取消最近快照的默认启动选择，旧快照仍保留在 Podman 中，挂载目录始终保留。
 
 ## 保存容器

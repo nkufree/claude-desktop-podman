@@ -59,9 +59,9 @@ buildah config \
 	--annotation "org.anthropic.claudecode.version=$CLAUDE_VERSION" \
 	--annotation "org.opencontainers.image.title=claude-code" \
 	--annotation "org.opencontainers.image.description=Claude Code on Alpine ready for rootless podman" \
-	--annotation "org.opencontainers.image.url=https://github.com/EvanCarroll/coding-agent-podman" \
-	--annotation "org.opencontainers.image.source=https://github.com/EvanCarroll/coding-agent-podman" \
-	--annotation "org.opencontainers.image.documentation=https://github.com/EvanCarroll/coding-agent-podman/blob/main/README.md" \
+	--annotation "org.opencontainers.image.url=https://github.com/nkufree/claude-desktop-podman" \
+	--annotation "org.opencontainers.image.source=https://github.com/nkufree/claude-desktop-podman" \
+	--annotation "org.opencontainers.image.documentation=https://github.com/nkufree/claude-desktop-podman/blob/main/docs/build-images.md" \
 	--annotation "org.opencontainers.image.license=AGPL-3.0-or-later" \
 	--annotation "org.opencontainers.image.created=$(date --iso-8601=seconds)" \
 	"$CONTAINER"
