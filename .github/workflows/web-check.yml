@@ -12,11 +12,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.13'
       - name: Validate backend, HTTP and WebSocket proxy
         run: make check
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check browser JavaScript
-        run: node --check webapp/static/app.js
+      - name: Validate browser JavaScript and blocked-storage fallback
+        run: |
+          node --check webapp/static/app.js
+          node --test tests/test_desktop_storage.cjs

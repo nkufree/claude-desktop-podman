@@ -50,10 +50,21 @@ function addPort(mapping = {host: '', container: '', protocol: 'tcp'}) {
 $('#add-port').addEventListener('click', () => { addPort(); markDirty(); });
 
 async function api(path, data) {
-  const response = await fetch(path, {headers: data ? {'Content-Type': 'application/json', 'X-CSRF-Token': csrf} : {}, method: data ? 'POST' : 'GET', body: data ? JSON.stringify(data) : undefined});
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || `请求失败 (${response.status})`);
-  return result;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), path === '/api/status' ? 45000 : 15000);
+  try {
+    const response = await fetch(path, {signal: controller.signal, credentials: 'same-origin', cache: 'no-store', headers: {'X-CSRF-Token': csrf, ...(data ? {'Content-Type': 'application/json'} : {})}, method: data ? 'POST' : 'GET', body: data ? JSON.stringify(data) : undefined});
+    if (!(response.headers.get('Content-Type') || '').includes('application/json')) {
+      throw new Error('本地接口返回了非预期内容，请使用命令行显示的 http://localhost:端口/ 地址访问');
+    }
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `请求失败 (${response.status})`);
+    return result;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('本地请求超时，请检查终端中的网页服务是否仍在运行');
+    if (error instanceof TypeError) throw new Error('无法连接本地服务，请在项目目录运行 ./bin/claude-desktop，并检查浏览器是否允许访问本地地址');
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 function notice(text, error = false) {
   $('#notice').textContent = text;
@@ -90,7 +101,8 @@ function connect(force = false) {
   $('#desktop-empty').hidden = ready;
   frame.hidden = !ready;
   if (ready && (!frame.getAttribute('src') || force)) {
-    frame.src = '/desktop/vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=2000&path=desktop%2Fwebsockify';
+    const base = `/desktop/${encodeURIComponent(csrf)}/`;
+    frame.src = `${base}vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=2000&path=${encodeURIComponent(base.slice(1) + 'websockify')}`;
   } else if (!ready && frame.getAttribute('src')) frame.removeAttribute('src');
 }
 function view(name) {
@@ -165,7 +177,11 @@ async function poll() {
   if (polling) return;
   polling = true;
   try { render(await api('/api/status')); }
-  catch (e) { notice(`控制台连接失败：${e.message}`, true); }
+  catch (e) {
+    $('#engine-status').textContent = '状态读取失败';
+    $('#state-badge').textContent = '连接异常';
+    notice(`控制台连接失败：${e.message}`, true);
+  }
   finally { polling = false; }
 }
 form.addEventListener('input', markDirty);
@@ -194,12 +210,16 @@ $('#reconnect').addEventListener('click', () => connect(true));
 $('#fullscreen').addEventListener('click', () => $('#desktop-frame').requestFullscreen?.().catch(e => notice(e.message, true)));
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 async function initialize() {
-  try {
-    populateConfig((await api('/api/config')).config);
-    $('#config-fields').disabled = false;
-    $('#save-button').disabled = false;
-  } catch (e) { notice(e.message, true); }
-  await poll();
+  await Promise.all([
+    (async () => {
+      try {
+        populateConfig((await api('/api/config')).config);
+        $('#config-fields').disabled = false;
+        $('#save-button').disabled = false;
+      } catch (e) { notice(`本地配置读取失败：${e.message}`, true); }
+    })(),
+    poll(),
+  ]);
 }
 initialize();
 setInterval(poll, 2500);

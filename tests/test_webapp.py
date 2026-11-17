@@ -267,7 +267,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn(self.server.csrf.encode(), body)
         self.assertNotIn(b'__CSRF__', body)
 
-    def test_api_requires_cookie_and_mutation_requires_csrf(self):
+    def test_api_requires_session_and_mutation_requires_csrf(self):
         self.assertEqual(self.request('/api/status')[0], 401)
         self.assertEqual(self.request('/api/status', Cookie=self.cookie)[0], 200)
         self.assertEqual(self.request('/api/config', Cookie=self.cookie)[0], 200)
@@ -275,6 +275,21 @@ class ServerTests(unittest.TestCase):
         headers = {'Cookie': self.cookie, 'X-CSRF-Token': self.server.csrf, 'Origin': 'http://' + self.host}
         self.assertEqual(self.request('/api/action', 'POST', {'action': 'start'}, **headers)[0], 202)
         self.assertEqual(self.request('/api/config', 'POST', {'memory': 1}, **headers)[0], 400)
+
+    def test_page_token_works_when_cookies_are_blocked_or_overwritten(self):
+        headers = {'X-CSRF-Token': self.server.csrf, 'Origin': 'http://' + self.host}
+        self.assertEqual(self.request('/api/config', **headers)[0], 200)
+        self.assertEqual(self.request('/api/status', Cookie='desktop_session=another-port', **headers)[0], 200)
+        self.assertEqual(self.request('/api/action', 'POST', {'action': 'start'}, **headers)[0], 202)
+        self.assertEqual(self.request('/api/config', **{'X-CSRF-Token': 'old-session'})[0], 401)
+        headers['Origin'] = 'http://evil.example'
+        self.assertEqual(self.request('/api/config', **headers)[0], 403)
+
+    def test_desktop_token_is_required_without_cookie(self):
+        self.assertEqual(self.request('/desktop/wrong-token/vnc.html')[0], 401)
+        self.assertEqual(self.request('/desktop/vnc.html')[0], 401)
+        # Valid authentication reaches the offline-desktop check.
+        self.assertEqual(self.request('/desktop/%s/vnc.html' % self.server.csrf)[0], 503)
 
     def test_dns_rebinding_and_foreign_origin_rejected(self):
         self.assertEqual(self.request('/', Host='evil.example')[0], 403)
@@ -284,7 +299,57 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.request('/../README.md')[0], 404)
         self.assertEqual(self.request('/app.js')[0], 200)
 
+    def test_static_mime_types_ignore_system_file_associations(self):
+        with patch('mimetypes.guess_type', return_value=('text/plain', None)):
+            for path, expected in [('/app.js', 'text/javascript; charset=utf-8'),
+                                   ('/desktop-storage.js', 'text/javascript; charset=utf-8'),
+                                   ('/style.css', 'text/css; charset=utf-8')]:
+                status, headers, body = self.request(path)
+                self.assertEqual(status, 200)
+                self.assertEqual(headers['Content-Type'], expected)
+                self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+                self.assertTrue(body)
+
+    def test_desktop_html_loads_storage_fallback_before_novnc(self):
+        listener = socket.socket()
+        listener.bind(('127.0.0.1', 0))
+        listener.listen()
+        listener.settimeout(5)
+        self.engine.desktop_port = listener.getsockname()[1]
+        html = b'<!DOCTYPE html><html><head><script type="module" src="app/ui.js"></script></head></html>'
+        observed = []
+
+        def backend():
+            with contextlib.closing(listener):
+                remote, _ = listener.accept()
+                with remote:
+                    remote.settimeout(5)
+                    request = b''
+                    while b'\r\n\r\n' not in request:
+                        request += remote.recv(1)
+                    observed.append(request)
+                    remote.sendall(('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %s\r\nETag: old\r\n\r\n' % len(html)).encode() + html)
+
+        thread = threading.Thread(target=backend)
+        thread.start()
+        status, headers, body = self.request('/desktop/%s/vnc.html?autoconnect=1' % self.server.csrf)
+        thread.join(timeout=5)
+        self.assertEqual(status, 200)
+        self.assertEqual(int(headers['Content-Length']), len(body))
+        self.assertIn(b'<head><script src="/desktop-storage.js"></script><script type="module"', body)
+        self.assertNotIn('ETag', headers)
+        self.assertEqual(headers['Referrer-Policy'], 'no-referrer')
+        self.assertIn(b'GET /vnc.html?autoconnect=1 ', observed[0])
+        self.assertIn(b'Accept-Encoding: identity', observed[0])
+        self.assertNotIn(self.server.csrf.encode(), observed[0])
+
     def test_websocket_proxy_preserves_initial_bytes_and_bidirectional_frames(self):
+        self.check_websocket_proxy(cookie_free=False)
+
+    def test_websocket_proxy_accepts_page_token_without_cookies(self):
+        self.check_websocket_proxy(cookie_free=True)
+
+    def check_websocket_proxy(self, cookie_free):
         listener = socket.socket()
         listener.bind(('127.0.0.1', 0))
         listener.listen()
@@ -306,7 +371,9 @@ class ServerTests(unittest.TestCase):
         backend_thread = threading.Thread(target=backend)
         backend_thread.start()
         with socket.create_connection(('127.0.0.1', self.server.server_port), timeout=5) as client:
-            client.sendall(('GET /desktop/websockify HTTP/1.1\r\nHost: %s\r\nCookie: %s\r\nOrigin: http://%s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n' % (self.host, self.cookie, self.host)).encode())
+            target = '/desktop/%s/websockify' % self.server.csrf if cookie_free else '/desktop/websockify'
+            cookie = '' if cookie_free else 'Cookie: %s\r\n' % self.cookie
+            client.sendall(('GET %s HTTP/1.1\r\nHost: %s\r\n%sOrigin: http://%s\r\nReferer: http://%s/desktop/%s/vnc.html\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n' % (target, self.host, cookie, self.host, self.host, self.server.csrf)).encode())
             headers = b''
             while b'\r\n\r\n' not in headers:
                 headers += client.recv(1)
@@ -317,6 +384,8 @@ class ServerTests(unittest.TestCase):
         backend_thread.join(timeout=5)
         self.assertIn(b'GET /websockify ', observed[0])
         self.assertNotIn(b'Cookie:', observed[0])
+        self.assertNotIn(self.server.csrf.encode(), observed[0])
+        self.assertNotIn(b'Referer:', observed[0])
         self.assertEqual(observed[1], b'client-frame')
 
 

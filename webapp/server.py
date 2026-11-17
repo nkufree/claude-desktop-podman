@@ -2,7 +2,6 @@ import argparse
 import hmac
 import http.client
 import json
-import mimetypes
 import secrets
 import select
 import threading
@@ -16,6 +15,9 @@ from .engine import Engine
 
 
 STATIC = Path(__file__).parent / 'static'
+STATIC_TYPES = {'/app.js': 'text/javascript; charset=utf-8',
+                '/desktop-storage.js': 'text/javascript; charset=utf-8',
+                '/style.css': 'text/css; charset=utf-8'}
 
 
 class UnbufferedResponse(http.client.HTTPResponse):
@@ -65,16 +67,27 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(403, {'error': '拒绝跨来源请求'})
             return False
         if authenticated:
+            # Edge may block cookies, and localhost cookies are shared across
+            # ports. A token embedded in this same-origin page is an equivalent
+            # session credential; no browser storage is required.
+            token = self.headers.get('X-CSRF-Token', '') if self.path.startswith('/api/') else ''
+            if self.path.startswith('/desktop/'):
+                parts = self.path.split('/', 3)
+                if len(parts) == 4:
+                    token = parts[2]
+            token_valid = token.isascii() and hmac.compare_digest(token, self.server.csrf)
             cookies = SimpleCookie()
             try:
                 cookies.load(self.headers.get('Cookie', ''))
                 value = cookies.get('desktop_session')
-                if not value or not hmac.compare_digest(value.value, self.server.session):
-                    self.reply(401, {'error': '请刷新控制台页面'})
+                cookie_valid = value and value.value.isascii() and hmac.compare_digest(value.value, self.server.session)
+                if not token_valid and not cookie_valid:
+                    self.reply(401, {'error': '页面会话已失效，请刷新控制台页面；服务重启后需重新加载页面'})
                     return False
             except Exception:
-                self.reply(401, {'error': '会话无效'})
-                return False
+                if not token_valid:
+                    self.reply(401, {'error': '会话无效，请刷新控制台页面'})
+                    return False
         if mutate and not hmac.compare_digest(self.headers.get('X-CSRF-Token', ''), self.server.csrf):
             self.reply(403, {'error': '请求令牌无效，请刷新页面'})
             return False
@@ -93,8 +106,10 @@ class Handler(BaseHTTPRequestHandler):
         elif path == '/':
             body = (STATIC / 'index.html').read_bytes().replace(b'__CSRF__', self.server.csrf.encode())
             self.reply(200, body, 'text/html; charset=utf-8', cookie=True)
-        elif path in ('/app.js', '/style.css'):
-            self.reply(200, (STATIC / path[1:]).read_bytes(), mimetypes.guess_type(path)[0] + '; charset=utf-8')
+        elif path in STATIC_TYPES:
+            # Windows registry MIME associations can classify .js as text/plain.
+            # With nosniff, Edge correctly refuses to execute that response.
+            self.reply(200, (STATIC / path[1:]).read_bytes(), STATIC_TYPES[path])
         else:
             self.reply(404, {'error': '页面不存在'})
 
@@ -128,13 +143,18 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(503, {'error': '远程桌面尚未启动'})
             return
         target = self.path[len('/desktop'):]
+        token_prefix = '/' + self.server.csrf + '/'
+        if target.startswith(token_prefix):
+            target = '/' + target[len(token_prefix):]
         # Prevent network-path request targets and header forwarding to arbitrary hosts.
         if not target.startswith('/') or target.startswith('//'):
             self.reply(400, {'error': '路径无效'})
             return
         headers = {k: v for k, v in self.headers.items()
-                   if k.lower() not in ('host', 'cookie', 'authorization', 'connection')}
+                   if k.lower() not in ('host', 'cookie', 'authorization', 'connection',
+                                        'x-csrf-token', 'referer')}
         headers['Host'] = '127.0.0.1:%s' % port
+        headers['Accept-Encoding'] = 'identity'
         websocket = self.headers.get('Upgrade', '').lower() == 'websocket'
         headers['Connection'] = 'Upgrade' if websocket else 'close'
         upstream = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
@@ -145,11 +165,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             upstream.request('GET', target, headers=headers)
             response = upstream.getresponse()
+            body = None
+            if response.status == 200 and urlsplit(target).path == '/vnc.html':
+                # Debian's noVNC directly accesses localStorage. Install a
+                # window-local fallback before its modules run when Edge blocks
+                # site storage, including for existing container images.
+                body = response.read().replace(b'<head>', b'<head><script src="/desktop-storage.js"></script>', 1)
             response_started = True
             self.send_response(response.status)
             for key, value in response.getheaders():
-                if key.lower() not in ('transfer-encoding', 'connection', 'server', 'date'):
+                if key.lower() not in ('transfer-encoding', 'connection', 'server', 'date',
+                                       'referrer-policy', 'cache-control') and not (
+                        body is not None and key.lower() in ('content-length', 'etag')):
                     self.send_header(key, value)
+            if body is not None:
+                self.send_header('Content-Length', str(len(body)))
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('Cache-Control', 'no-store')
             if websocket and response.status == 101:
                 self.send_header('Connection', 'Upgrade')
                 self.end_headers()
@@ -163,6 +195,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 self.close_connection = True
+                if body is not None:
+                    self.wfile.write(body)
+                    return
                 while True:
                     chunk = response.read(65536)
                     if not chunk:
