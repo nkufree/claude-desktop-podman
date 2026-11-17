@@ -1,0 +1,35 @@
+/* Keep desktop labels readable and application logos unchanged when selected. */
+XfdesktopIconView.view {
+  color: #ffffff;
+  background-color: transparent;
+  background-image: none;
+  border-radius: 6px;
+  text-shadow: 0 1px 2px rgba(8, 25, 55, 0.75);
+  -gtk-icon-effect: none;
+  -gtk-icon-shadow: none;
+}
+
+XfdesktopIconView.view:hover {
+  color: #ffffff;
+  background-color: rgba(160, 205, 255, 0.16);
+}
+
+XfdesktopIconView.view:active,
+XfdesktopIconView.view:selected,
+XfdesktopIconView.view:active:backdrop,
+XfdesktopIconView.view:selected:backdrop {
+  color: #ffffff;
+  background-color: rgba(105, 175, 255, 0.32);
+  background-image: none;
+  border: 1px solid rgba(190, 222, 255, 0.85);
+  border-radius: 6px;
+  box-shadow: none;
+  outline-style: none;
+  -gtk-icon-effect: none;
+}
+
+XfdesktopIconView.view .rubberband {
+  background-color: rgba(105, 175, 255, 0.22);
+  border: 1px solid rgba(190, 222, 255, 0.9);
+  border-radius: 4px;
+}

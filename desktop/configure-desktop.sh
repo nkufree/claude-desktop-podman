@@ -2,6 +2,15 @@
 set -euo pipefail
 settings="$HOME/.config/claude-podman"
 marker="$settings/fluent-windows-style-v1"
+# Apply desktop-only GTK fixes to both new and existing persistent homes.
+gtk_config="$HOME/.config/gtk-3.0"
+mkdir -p "$gtk_config"
+cp /usr/local/share/claude-podman/windows-style/desktop-icons.css "$gtk_config/claude-desktop-icons.css"
+touch "$gtk_config/gtk.css"
+if ! grep -Fxq '@import url("claude-desktop-icons.css");' "$gtk_config/gtk.css"; then
+    { printf '%s\n' '@import url("claude-desktop-icons.css");'; cat "$gtk_config/gtk.css"; } > "$gtk_config/gtk.css.tmp"
+    mv "$gtk_config/gtk.css.tmp" "$gtk_config/gtk.css"
+fi
 # Refresh project shortcuts even when this persistent home already has a theme.
 mkdir -p "$HOME/Desktop"
 for entry in '3:claude-container.desktop:Claude.desktop' '4:container-browser.desktop:Chromium.desktop'; do

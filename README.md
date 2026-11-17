@@ -8,6 +8,8 @@
 
 桌面默认提供 **Claude Desktop** 和 **Chromium** 快捷方式，底部任务栏也提供相同入口，分别显示 Claude 和 Chromium 标志。浏览器实际使用 Chromium，支持 AMD64 / ARM64，并沿用容器代理和内部登录配置；启动时会同步更新已有 home 目录中的项目快捷方式。
 
+桌面图标采用半透明浅蓝色选中高亮、圆角细边框和白色文字，选中时保留应用标志原色；拖选框使用相同配色。样式会应用到已有 home 目录，并保留其他 GTK 自定义设置。
+
 Linux 安装包来自 [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) 的社区打包版本。该项目不属于 Anthropic 官方 Linux 发行版；桌面登录和功能兼容性取决于社区版本及上游服务。Cowork 等依赖系统集成的功能不保证可用。
 
 ## 页面展示
