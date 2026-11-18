@@ -2,6 +2,12 @@
 set -euo pipefail
 settings="$HOME/.config/claude-podman"
 marker="$settings/fluent-windows-style-v1"
+# Add Pinyin to existing homes without replacing the user's input preferences.
+mkdir -p "$HOME/.config/fcitx5" "$HOME/.config/autostart"
+if [ ! -f "$HOME/.config/fcitx5/profile" ]; then
+    cp /usr/local/share/claude-podman/input-method/profile "$HOME/.config/fcitx5/profile"
+fi
+cp /usr/local/share/claude-podman/input-method/org.fcitx.Fcitx5.desktop "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
 # Apply desktop-only GTK fixes to both new and existing persistent homes.
 gtk_config="$HOME/.config/gtk-3.0"
 mkdir -p "$gtk_config"

@@ -7,6 +7,7 @@ RUN sed -i "s|http://deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/deb
     ca-certificates curl python3 procps xfce4 xfce4-terminal dbus-x11 \
     tigervnc-standalone-server tigervnc-tools novnc websockify \
     chromium chromium-sandbox xdg-utils desktop-file-utils \
+    fcitx5 fcitx5-pinyin fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-config-qt \
     gnome-keyring seahorse libsecret-1-0 libsecret-tools libnss3 libgbm1 libasound2 \
     fonts-noto-cjk fonts-noto-color-emoji locales tzdata tini \
     gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf \
@@ -34,6 +35,7 @@ COPY launch-claude.sh /usr/local/bin/launch-claude
 COPY launch-browser.sh /usr/local/bin/launch-browser
 COPY configure-desktop.sh /usr/local/bin/configure-desktop
 COPY windows-style /usr/local/share/claude-podman/windows-style
+COPY input-method /usr/local/share/claude-podman/input-method
 COPY claude.desktop /usr/share/applications/claude-container.desktop
 COPY browser.desktop /usr/share/applications/container-browser.desktop
 RUN chmod 755 /usr/local/bin/start-desktop /usr/local/bin/launch-claude /usr/local/bin/launch-browser /usr/local/bin/configure-desktop \
@@ -41,7 +43,8 @@ RUN chmod 755 /usr/local/bin/start-desktop /usr/local/bin/launch-claude /usr/loc
     && update-desktop-database /usr/share/applications
 
 ENV HOME=/home/claude DISPLAY=:1 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US:en TZ=America/New_York \
-    DESKTOP_RESOLUTION=1920x1080 BROWSER=/usr/local/bin/launch-browser
+    DESKTOP_RESOLUTION=1920x1080 BROWSER=/usr/local/bin/launch-browser \
+    GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 USER claude
 WORKDIR /home/claude
 EXPOSE 6080

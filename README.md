@@ -10,6 +10,8 @@
 
 桌面图标采用半透明浅蓝色选中高亮、圆角细边框和白色文字，选中时保留应用标志原色；拖选框使用相同配色。样式会应用到已有 home 目录，并保留其他 GTK 自定义设置。
 
+预装 **Fcitx 5 中文拼音输入法**，随桌面自动启动。按 **Ctrl + Space** 切换美式英文键盘与中文拼音，输入拼音后按空格选择候选词。任务栏输入法图标或应用菜单中的 **Fcitx 5 Configuration** 可调整设置。桌面语言仍为英文；输入法偏好和用户词库随 home 目录持久保存，已有输入法配置会保留。
+
 Linux 安装包来自 [aaddrick/claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) 的社区打包版本。该项目不属于 Anthropic 官方 Linux 发行版；桌面登录和功能兼容性取决于社区版本及上游服务。Cowork 等依赖系统集成的功能不保证可用。
 
 ## 页面展示

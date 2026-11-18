@@ -2,6 +2,7 @@
 set -euo pipefail
 umask 077
 export XDG_RUNTIME_DIR=/tmp/runtime-claude
+export GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 mkdir -p "$XDG_RUNTIME_DIR" "$HOME/.config/autostart" "$HOME/Desktop"
 chmod 700 "$XDG_RUNTIME_DIR"
 /usr/local/bin/configure-desktop

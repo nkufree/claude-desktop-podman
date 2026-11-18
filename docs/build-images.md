@@ -26,7 +26,7 @@
 3. 非 PR 构建登录 `ghcr.io`，使用仓库自动提供的 `GITHUB_TOKEN`。
 4. 以 `desktop/` 为构建上下文，按 [desktop/Containerfile](../desktop/Containerfile) 完成以下全部层：
    - 从 `debian:bookworm-slim` 开始，设置 Debian 软件源并执行 `apt-get update`。
-   - 安装 Xfce、终端、D-Bus、TigerVNC、noVNC、websockify、Chromium、密钥环、字体、语言包、时区、主题依赖和 tini。
+   - 安装 Xfce、终端、D-Bus、TigerVNC、noVNC、websockify、Chromium、Fcitx 5 拼音及 GTK / Qt 输入模块、密钥环、字体、语言包、时区、主题依赖和 tini。
    - 生成英文 `en_US.UTF-8` locale，清理 APT 缓存。
    - 执行 `install-theme.py`，下载并校验固定提交的 Fluent 主题，安装窗口主题与图标。
    - 执行 `install-claude.py`，下载对应架构的 `.deb` 并校验 SHA256，再用 APT 安装 Claude Desktop 及其依赖。

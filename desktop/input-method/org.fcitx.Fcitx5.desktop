@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Chinese Input (Fcitx 5)
+Comment=Press Ctrl+Space to switch between English and Chinese Pinyin
+Exec=fcitx5
+TryExec=fcitx5
+Icon=fcitx
+Terminal=false
+StartupNotify=false
